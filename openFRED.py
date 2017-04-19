@@ -114,6 +114,11 @@ def import_nc_file(filepath, classes, session):
         d0 = ncv.dimensions
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in ncv.dimensions])
+        def getset(d, k, v):
+          """ Returns `d.get(k, v)` and stores `v` at `k` `if not k in d`.
+          """
+          d[k] = d.get(k, v)
+          return d[k]
         if 'time' in d0:
             if not d0[0] == 'time':
                 m = ("Variable {} has 'time' but it's not the first dimension."
@@ -146,9 +151,8 @@ def import_nc_file(filepath, classes, session):
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
-                            grid[xy] = grid.get(xy,
-                                                classes['Location'](point=wkt))
-                            location = grid[xy]
+                            location = getset(grid, xy,
+                                              classes['Location'](point=wkt))
                             v = classes['Value'](
                                     altitude=(float(altitude)
                                               if altitude is not None
