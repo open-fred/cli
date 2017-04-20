@@ -111,34 +111,34 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         v0 = ncv
-        d0 = ncv.dimensions
+        dims = ncv.dimensions
         total_size = reduce(lambda x, y: x*y,
-                            [ds[d].size for d in ncv.dimensions])
+                            [ds[d].size for d in dims])
         def getset(d, k, v):
           """ Returns `d.get(k, v)` and stores `v` at `k` `if not k in d`.
           """
           d[k] = d.get(k, v)
           return d[k]
-        if 'time' in d0:
-            if not d0[0] == 'time':
+        if 'time' in dims:
+            if not dims[0] == 'time':
                 m = ("Variable {} has 'time' but it's not the first dimension."
                      .format(name))
                 raise click.ClickException(m)
             epoch = dt(2002, 2, 1, tzinfo=tz.utc)
-            if 'altitude' in d0:
-                if not d0[1] == 'altitude':
+            if 'altitude' in dims:
+                if not dims[1] == 'altitude':
                     m = ("Variable {} has 'altitude' but it's not the " +
                             "second dimension.".format(name))
                     raise click.ClickException(m)
                 altitude = ds['altitude'][0]
-                d1 = d0[2:]
+                d1 = dims[2:]
             else:
-                d1 = d0[1:]
+                d1 = dims[1:]
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
                 for ib, b in enumerate(ds['time_bnds']):
                     v1 = v0[ib]
-                    if 'altitude' in d0: v1 = v1[0]
+                    if 'altitude' in dims: v1 = v1[0]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     for ix, x in enumerate(ds[d1[0]]):
                         #click.echo("ix: {}".format(ix))
@@ -146,7 +146,7 @@ def import_nc_file(filepath, classes, session):
                         d2 = d1[1:]
                         for iy, y in enumerate(ds[d2[0]]):
                             #click.echo("{}: {}, {}: {}, {}: {}, Alt.: {}".format(
-                            #        d0[0], ib, d1[0], ix, d2[0], iy,
+                            #        dims[0], ib, d1[0], ix, d2[0], iy,
                             #        altitude if altitude is not None else "None"))
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
