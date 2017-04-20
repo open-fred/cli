@@ -115,10 +115,10 @@ def import_nc_file(filepath, classes, session):
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in dims])
         def getset(d, k, v):
-          """ Returns `d.get(k, v)` and stores `v` at `k` `if not k in d`.
-          """
-          d[k] = d.get(k, v)
-          return d[k]
+            """ Returns `d.get(k, v)` and stores `v` at `k` `if not k in d`.
+            """
+            d[k] = d.get(k, v)
+            return d[k]
         if 'time' in dims:
             if not dims[0] == 'time':
                 m = ("Variable {} has 'time' but it's not the first dimension."
