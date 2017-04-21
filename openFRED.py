@@ -137,8 +137,10 @@ def import_nc_file(filepath, classes, session):
                 for t_idx, b in enumerate(ds['time_bnds']):
                     idxs[0] = t_idx
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
+                    # ix: index into the `rlat` dimension
                     for ix, x in enumerate(ds[dims[-2]]):
                         idxs[-2] = ix
+                        # iy: index into the `rlon` dimension
                         for iy, y in enumerate(ds[dims[-1]]):
                             idxs[-1] = iy
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
