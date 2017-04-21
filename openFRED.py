@@ -157,8 +157,8 @@ def import_nc_file(filepath, classes, session):
                                     v=float(ncv[tuple(idxs)]),
                                     timestamp=classes['Timestamp'](start=ts[0],
                                                                    stop=ts[1]),
-                                    location=location)
-                            dbv.values.append(v)
+                                    location=location,
+                                    variable=dbv)
                             bar.update(1)
                     session.commit()
     click.echo("     Done: {}\n".format(filepath))
