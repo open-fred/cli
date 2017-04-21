@@ -138,10 +138,10 @@ def import_nc_file(filepath, classes, session):
                     idxs[0] = t_idx
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     # ix: index into the `rlat` dimension
-                    for ix, x in enumerate(ds[dims[-2]]):
+                    for ix in range(ds[dims[-2]].size):
                         idxs[-2] = ix
                         # iy: index into the `rlon` dimension
-                        for iy, y in enumerate(ds[dims[-1]]):
+                        for iy in range(ds[dims[-1]].size):
                             idxs[-1] = iy
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
