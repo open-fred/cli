@@ -139,11 +139,7 @@ def import_nc_file(filepath, classes, session):
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     for ix, x in enumerate(ds[dims[-2]]):
                         idxs[-2] = ix
-                        #click.echo("ix: {}".format(ix))
                         for iy, y in enumerate(ds[dims[-1]]):
-                            #click.echo("{}: {}, {}: {}, {}: {}, Alt.: {}".format(
-                            #        dims[0], t_idx, dims[-2], ix, dims[-1], iy,
-                            #        altitude if altitude is not None else "None"))
                             idxs[-1] = iy
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
