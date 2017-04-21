@@ -110,8 +110,8 @@ def import_nc_file(filepath, classes, session):
                                                         None),
                                   description=ncv.long_name)
         session.add(dbv)
-        v0 = ncv
         dims = ncv.dimensions
+        idxs = [0, 0, 0]
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in dims])
         def getset(d, k, v):
@@ -131,23 +131,20 @@ def import_nc_file(filepath, classes, session):
                             "second dimension.".format(name))
                     raise click.ClickException(m)
                 altitude = ds['altitude'][0]
-                d1 = dims[2:]
-            else:
-                d1 = dims[1:]
+                idxs.append(0)
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
-                for ib, b in enumerate(ds['time_bnds']):
-                    v1 = v0[ib]
-                    if 'altitude' in dims: v1 = v1[0]
+                for t_idx, b in enumerate(ds['time_bnds']):
+                    idxs[0] = t_idx
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                    for ix, x in enumerate(ds[d1[0]]):
+                    for ix, x in enumerate(ds[dims[-2]]):
+                        idxs[-2] = ix
                         #click.echo("ix: {}".format(ix))
-                        v2 = v1[ix]
-                        d2 = d1[1:]
-                        for iy, y in enumerate(ds[d2[0]]):
+                        for iy, y in enumerate(ds[dims[-1]]):
                             #click.echo("{}: {}, {}: {}, {}: {}, Alt.: {}".format(
-                            #        dims[0], ib, d1[0], ix, d2[0], iy,
+                            #        dims[0], t_idx, dims[-2], ix, dims[-1], iy,
                             #        altitude if altitude is not None else "None"))
+                            idxs[-1] = iy
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
@@ -157,7 +154,7 @@ def import_nc_file(filepath, classes, session):
                                     altitude=(float(altitude)
                                               if altitude is not None
                                               else None),
-                                    v=float(v2[iy]),
+                                    v=float(ncv[tuple(idxs)]),
                                     timestamp=classes['Timestamp'](start=ts[0],
                                                                    stop=ts[1]),
                                     location=location)
