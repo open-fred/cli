@@ -111,7 +111,7 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dims = ncv.dimensions
-        idxs = [0, 0, 0]
+        idxs = [0 for _ in dims]
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in dims])
         def getset(d, k, v):
@@ -131,7 +131,6 @@ def import_nc_file(filepath, classes, session):
                             "second dimension.".format(name))
                     raise click.ClickException(m)
                 altitude = ds['altitude'][0]
-                idxs.append(0)
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
                 for t_idx, b in enumerate(ds['time_bnds']):
