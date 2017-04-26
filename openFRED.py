@@ -136,12 +136,11 @@ def import_nc_file(filepath, classes, session):
                     b = ds['time_bnds'][indexes[0]]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     if True:
-                        ix = indexes[-2]
                         if True:
-                            iy = indexes[-1]
-                            # ix: index into the `rlat` dimension
-                            # iy: index into the `rlon` dimension
-                            xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
+                            # indexes[-2]: index into the `rlat` dimension
+                            # indexes[-1]: index into the `rlon` dimension
+                            xy = (ds['lon'][indexes[-2]][indexes[-1]],
+                                  ds['lat'][indexes[-2]][indexes[-1]])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
                             location = getset(grid, xy,
