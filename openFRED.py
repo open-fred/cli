@@ -111,7 +111,7 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dims = ncv.dimensions
-        idxs = [0 for _ in dims]
+        indexes = [0 for _ in dims]
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in dims])
         def getset(d, k, v):
@@ -134,14 +134,14 @@ def import_nc_file(filepath, classes, session):
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
                 for t_idx, b in enumerate(ds['time_bnds']):
-                    idxs[0] = t_idx
+                    indexes[0] = t_idx
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     # ix: index into the `rlat` dimension
                     for ix in range(ds[dims[-2]].size):
-                        idxs[-2] = ix
+                        indexes[-2] = ix
                         # iy: index into the `rlon` dimension
                         for iy in range(ds[dims[-1]].size):
-                            idxs[-1] = iy
+                            indexes[-1] = iy
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
@@ -151,7 +151,7 @@ def import_nc_file(filepath, classes, session):
                                     altitude=(float(altitude)
                                               if altitude is not None
                                               else None),
-                                    v=float(ncv[tuple(idxs)]),
+                                    v=float(ncv[tuple(indexes)]),
                                     timestamp=classes['Timestamp'](start=ts[0],
                                                                    stop=ts[1]),
                                     location=location,
