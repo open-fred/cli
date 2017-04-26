@@ -111,7 +111,6 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dims = ncv.dimensions
-        indexes = [0 for _ in dims]
         total_size = reduce(lambda x, y: x*y,
                             [ds[d].size for d in dims])
         def getset(d, k, v):
@@ -133,15 +132,15 @@ def import_nc_file(filepath, classes, session):
                 altitude = ds['altitude'][0]
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
-                for t_idx, b in enumerate(ds['time_bnds']):
-                    indexes[0] = t_idx
+                for indexes in it.product(*(range(ds[d].size) for d in dims)):
+                    b = ds['time_bnds'][indexes[0]]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     # ix: index into the `rlat` dimension
-                    for ix in range(ds[dims[-2]].size):
-                        indexes[-2] = ix
+                    if True:
+                        ix = indexes[-2]
                         # iy: index into the `rlon` dimension
-                        for iy in range(ds[dims[-1]].size):
-                            indexes[-1] = iy
+                        if True:
+                            iy = indexes[-1]
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
@@ -151,7 +150,7 @@ def import_nc_file(filepath, classes, session):
                                     altitude=(float(altitude)
                                               if altitude is not None
                                               else None),
-                                    v=float(ncv[tuple(indexes)]),
+                                    v=float(ncv[indexes]),
                                     timestamp=classes['Timestamp'](start=ts[0],
                                                                    stop=ts[1]),
                                     location=location,
