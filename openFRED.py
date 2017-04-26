@@ -135,26 +135,21 @@ def import_nc_file(filepath, classes, session):
                 for indexes in it.product(*(range(ds[d].size) for d in dims)):
                     b = ds['time_bnds'][indexes[0]]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                    if True:
-                        if True:
-                            # indexes[-2]: index into the `rlat` dimension
-                            # indexes[-1]: index into the `rlon` dimension
-                            xy = (ds['lon'][indexes[-2]][indexes[-1]],
-                                  ds['lat'][indexes[-2]][indexes[-1]])
-                            wkt = WKT('POINT ({} {})'.format(*xy),
-                                      srid=4326)
-                            location = getset(grid, xy,
-                                              classes['Location'](point=wkt))
-                            v = classes['Value'](
-                                    altitude=(float(altitude)
-                                              if altitude is not None
-                                              else None),
-                                    v=float(ncv[indexes]),
-                                    timestamp=classes['Timestamp'](start=ts[0],
-                                                                   stop=ts[1]),
-                                    location=location,
-                                    variable=dbv)
-                            bar.update(1)
+                    # indexes[-2]: index into the `rlat` dimension
+                    # indexes[-1]: index into the `rlon` dimension
+                    xy = (ds['lon'][indexes[-2]][indexes[-1]],
+                          ds['lat'][indexes[-2]][indexes[-1]])
+                    wkt = WKT('POINT ({} {})'.format(*xy), srid=4326)
+                    location = getset(grid, xy, classes['Location'](point=wkt))
+                    v = classes['Value'](
+                            altitude=(float(altitude)
+                                      if altitude is not None else None),
+                            v=float(ncv[indexes]),
+                            timestamp=classes['Timestamp'](start=ts[0],
+                                                           stop=ts[1]),
+                            location=location,
+                            variable=dbv)
+                    bar.update(1)
                     session.commit()
     click.echo("     Done: {}\n".format(filepath))
 
