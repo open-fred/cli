@@ -135,12 +135,12 @@ def import_nc_file(filepath, classes, session):
                 for indexes in it.product(*(range(ds[d].size) for d in dims)):
                     b = ds['time_bnds'][indexes[0]]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                    # ix: index into the `rlat` dimension
                     if True:
                         ix = indexes[-2]
-                        # iy: index into the `rlon` dimension
                         if True:
                             iy = indexes[-1]
+                            # ix: index into the `rlat` dimension
+                            # iy: index into the `rlon` dimension
                             xy = (ds['lon'][ix][iy], ds['lat'][ix][iy])
                             wkt = WKT('POINT ({} {})'.format(*xy),
                                       srid=4326)
