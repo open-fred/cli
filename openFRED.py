@@ -131,33 +131,31 @@ def import_nc_file(filepath, classes, session):
             """
             d[k] = d.get(k, v)
             return d[k]
-        if 'time' in dims:
-            epoch = dt(2002, 2, 1, tzinfo=tz.utc)
-            with click.progressbar(length=total_size,
-                                   label="     Var.: " + name) as bar:
-                for indexes, count in zip(
-                        it.product(*(range(ds[d].size) for d in dims)),
-                        it.count()):
-                    b = value_of('time_bnds', indexes, 'time')
-                    if 'altitude' in dims:
-                        altitude = value_of('altitude', indexes)
-                    ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                    xy = (value_of(variable, indexes, 'rlat', 'rlon')
-                          for variable in ('lon', 'lat'))
-                    wkt = WKT('POINT ({} {})'.format(*xy), srid=4326)
-                    location = getset(grid, xy, classes['Location'](point=wkt))
-                    v = classes['Value'](
-                            altitude=(float(altitude)
-                                      if altitude is not None else None),
-                            v=float(ncv[indexes]),
-                            timestamp=classes['Timestamp'](start=ts[0],
-                                                           stop=ts[1]),
-                            location=location,
-                            variable=dbv)
-                    session.add(v)
-                    if count % 1000 == 0:
-                        session.commit()
-                        bar.update(1000)
+        epoch = dt(2002, 2, 1, tzinfo=tz.utc)
+        with click.progressbar(length=total_size,
+                               label="     Var.: " + name) as bar:
+            for indexes, count in zip(
+                    it.product(*(range(ds[d].size) for d in dims)),
+                    it.count()):
+                b = value_of('time_bnds', indexes, 'time')
+                if 'altitude' in dims:
+                    altitude = value_of('altitude', indexes)
+                ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
+                xy = (value_of(variable, indexes, 'rlat', 'rlon')
+                      for variable in ('lon', 'lat'))
+                wkt = WKT('POINT ({} {})'.format(*xy), srid=4326)
+                location = getset(grid, xy, classes['Location'](point=wkt))
+                v = classes['Value'](
+                        altitude=(float(altitude)
+                                  if altitude is not None else None),
+                        v=float(ncv[indexes]),
+                        timestamp=classes['Timestamp'](start=ts[0], stop=ts[1]),
+                        location=location,
+                        variable=dbv)
+                session.add(v)
+                if count % 1000 == 0:
+                    session.commit()
+                    bar.update(1000)
     click.echo("     Done: {}\n".format(filepath))
 
 
