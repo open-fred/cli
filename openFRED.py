@@ -141,8 +141,8 @@ def import_nc_file(filepath, classes, session):
                 if 'altitude' in dims:
                     altitude = value_of('altitude', indexes)
                 ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                xy = (value_of(variable, indexes, 'rlat', 'rlon')
-                      for variable in ('lon', 'lat'))
+                xy = tuple(value_of(variable, indexes, 'rlat', 'rlon')
+                           for variable in ('lon', 'lat'))
                 wkt = WKT('POINT ({} {})'.format(*xy), srid=4326)
                 location = getset(grid, xy, classes['Location'](point=wkt))
                 v = classes['Value'](
