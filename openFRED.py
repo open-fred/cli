@@ -111,8 +111,7 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dims = ncv.dimensions
-        total_size = reduce(lambda x, y: x*y,
-                            [ds[d].size for d in dims])
+        total_size = reduce(lambda x, y: x*y, (ds[d].size for d in dims))
         d_index = {d: i for i, d in enumerate(dims)}
         def value_of(variable, indices, *dimensions):
             """ Returns the value of `variable` at `index` for `dimensions`.
