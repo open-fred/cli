@@ -132,7 +132,9 @@ def import_nc_file(filepath, classes, session):
                 altitude = ds['altitude'][0]
             with click.progressbar(length=total_size,
                                    label="     Var.: " + name) as bar:
-                for indexes in it.product(*(range(ds[d].size) for d in dims)):
+                for indexes, count in zip(
+                        it.product(*(range(ds[d].size) for d in dims)),
+                        it.count()):
                     b = ds['time_bnds'][indexes[0]]
                     ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
                     # indexes[-2]: index into the `rlat` dimension
@@ -149,8 +151,9 @@ def import_nc_file(filepath, classes, session):
                                                            stop=ts[1]),
                             location=location,
                             variable=dbv)
-                    bar.update(1)
-                    session.commit()
+                    if count % 1000 == 0:
+                        session.commit()
+                        bar.update(1000)
     click.echo("     Done: {}\n".format(filepath))
 
 
