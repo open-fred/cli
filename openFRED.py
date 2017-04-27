@@ -154,6 +154,7 @@ def import_nc_file(filepath, classes, session):
                                                            stop=ts[1]),
                             location=location,
                             variable=dbv)
+                    session.add(v)
                     if count % 1000 == 0:
                         session.commit()
                         bar.update(1000)
