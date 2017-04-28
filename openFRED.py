@@ -177,7 +177,6 @@ def db():
     """ Commands to work with openFRED databases.
     """
     pass
-openFRED.add_command(db)
 
 @db.command()
 def initialize():
@@ -240,5 +239,6 @@ def import_(paths):
         session.commit()
 
 if __name__ == '__main__':
+    openFRED.add_command(db)
     openFRED()
 
