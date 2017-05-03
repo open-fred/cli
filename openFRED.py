@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
+from operator import mul as multiply
 import os
 import itertools as it
 
@@ -186,12 +187,11 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dcache = DimensionCache(ds, name, session, classes)
-        dims = ncv.dimensions
-        total_size = reduce(lambda x, y: x*y, (ds[d].size for d in dims))
+        total_size = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         with click.progressbar(length=total_size,
                                label="     Var.: " + name) as bar:
             for indexes, count in zip(
-                    it.product(*(range(ds[d].size) for d in dims)),
+                    it.product(*(range(ds[d].size) for d in ncv.dimensions)),
                     it.count()):
                 altitude = dcache.altitudes[indexes]
                 altitude = None if altitude is None else float(altitude)
