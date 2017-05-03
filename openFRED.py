@@ -41,6 +41,70 @@ class Keychanger(MM):
     def __len__(self):
         return self.data.__len__()
 
+class DimensionCache:
+    """ Caches dimension values to speed up access later on.
+
+    Iterates through the dimensions of the given variable and gets the
+    corresponding objects from the database or creates them if they don't
+    exist. This enables faster lookup, as the database doesn't have to be hit
+    later on and it also enables talking about dimension values in terms of
+    their primary key in the database, which is necessary for fast insertion of
+    `Value`s into the database.
+    """
+    def __init__(self, ds, v, session, classes):
+        d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
+        self.session = session
+        altitude = None
+        height = list(filter(
+            lambda v: v.startswith("height_") and v[-1] == "m",
+            ds.variables.keys()))
+        if height:
+            # Will look like 'height_XYZm'.
+            # Cut off prefix and suffix, convert, extract, and remove.
+            altitude = int(height[0][len('height_'):][:-1])
+
+        click.echo("  Caching dimensions.")
+        epoch = dt(2002, 2, 1, tzinfo=tz.utc)
+
+        def timestamp(index):
+            bounds = [epoch + td(seconds=s) for s in ds['time_bnds'][index]]
+            return {"start": bounds[0], "stop": bounds[1]}
+
+        self.timestamps = Keychanger(
+            data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
+                                 "     Time:",
+                                 classes['Timestamp'],
+                                 timestamp)),
+            transformer=lambda indexes: indexes[d_index['time']])
+
+        def point(key):
+            wkt = WKT('POINT ({} {})'.format(ds['lon'][key], ds['lat'][key]),
+                      srid=4326)
+            return {"point": wkt}
+
+        location_index = list(it.product(*(range(len(ds.variables.get(d, ())))
+                                           for d in ('rlat', 'rlon'))))
+        self.locations = Keychanger(
+            data=dict(zip(location_index,
+                          list(self.cache(location_index, " Location:",
+                               classes['Location'],
+                               point)))),
+            transformer=lambda indexes: tuple(indexes[d_index[d]]
+                                              for d in ('rlat', 'rlon')))
+        self.altitudes = Keychanger(
+            data=ds.variables.get("altitude", [altitude]),
+            transformer=lambda ixs: (0 if not d_index.get('altitude')
+                                       else ixs[d_index['altitude']]))
+
+    def cache(self, indexes, label, cls, kwargs):
+        with click.progressbar(indexes, label=label) as bar:
+            for index in bar:
+                d = kwargs(index)
+                o = (self.session.query(cls).filter_by(**d).one_or_none() or
+                     cls(**d))
+                self.session.add(o)
+                yield(o)
+            self.session.flush()
 
 ### Auxiliary functions needed by more than one command.
 
