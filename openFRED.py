@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
 import os
@@ -16,6 +17,29 @@ import click
 import netCDF4 as nc
 
 import oemof.db
+
+
+class Keychanger(MM):
+    """ A mapping that applies a function to the keys before lookup.
+    """
+    def __init__(self, data, transformer):
+        self.data = data
+        self.transform = transformer
+
+    def __getitem__(self, key):
+        return self.data.__getitem__(self.transform(key))
+
+    def __setitem__(self, key, value):
+        return self.data.__setitem__(self.transform(key), value)
+
+    def __delitem__(self, key):
+        return self.data.__delitem__(self.transform(key))
+
+    def __iter__(self):
+        return self.data.__iter__()
+
+    def __len__(self):
+        return self.data.__len__()
 
 
 ### Auxiliary functions needed by more than one command.
