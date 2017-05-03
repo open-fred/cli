@@ -203,7 +203,7 @@ def import_nc_file(filepath, classes, session):
                         variable=dbv)
                 session.add(v)
                 if count % 1000 == 0:
-                    session.commit()
+                    session.flush()
                     bar.update(1000)
     click.echo("     Done: {}\n".format(filepath))
 
