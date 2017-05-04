@@ -173,15 +173,19 @@ def openFRED(context):
 @click.option('--configuration-file', '-c', type=click.Path(exists=True),
               help=('Specifies an alternative configuration file ' +
                     'used by `oemof.db`.'))
-def db(context, configuration_file):
+@click.option('--section', '-s', default='openFRED', show_default=True,
+              help=("The section in `oemof.db`'s configuration file from " +
+                    "which database parameters should be read."))
+def db(context, configuration_file, section):
     """ Commands to work with openFRED databases.
     """
     if configuration_file is not None:
         oemof.db.load_config(configuration_file)
-    context.obj['db'] = {'cfg': configuration_file}
+    context.obj['db'] = {'cfg': configuration_file, 'section': section}
 
 @db.command()
-def initialize():
+@click.pass_context
+def initialize(context):
     """ Initialize a database for openFRED data.
 
     Connect to the database specified in the `[openFRED]` section of oemof's
@@ -190,7 +194,7 @@ def initialize():
     exists. The same holds for the tables necessary to store openFRED data
     inside the schema.
     """
-    section = 'openFRED'
+    section = context.obj['db']['section']
     schema = oemof.db.config.get(section, 'schema')
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
@@ -209,9 +213,10 @@ def initialize():
 
 
 @db.command("import")
+@click.pass_context
 @click.argument('paths', type=click.Path(exists=True), metavar='PATHS',
                 nargs=-1)
-def import_(paths):
+def import_(context, paths):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
@@ -229,7 +234,7 @@ def import_(paths):
                     if f[-3:] == '.nc':
                         filepaths.append(os.path.join(path, f))
 
-    section = 'openFRED'
+    section = context.obj['db']['section']
     schema = oemof.db.config.get(section, 'schema')
     engine = oemof.db.engine(section)
 
