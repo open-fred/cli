@@ -179,7 +179,8 @@ def chunk(iterable, n):
     """ Divide `iterable` into chunks of size `n` without padding.
     """
     iterator = iter(iterable)
-    return (it.islice(iterator, n) for _ in it.repeat(None))
+    while True:
+        yield it.islice(iterator, n)
 
 def import_nc_file(filepath, classes, session):
     click.echo("Importing: {}".format(filepath))
