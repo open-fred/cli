@@ -1,6 +1,8 @@
 from contextlib import contextmanager
+from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
+from operator import mul as multiply
 import os
 import itertools as it
 
@@ -17,6 +19,93 @@ import netCDF4 as nc
 
 import oemof.db
 
+
+class Keychanger(MM):
+    """ A mapping that applies a function to the keys before lookup.
+    """
+    def __init__(self, data, transformer):
+        self.data = data
+        self.transform = transformer
+
+    def __getitem__(self, key):
+        return self.data.__getitem__(self.transform(key))
+
+    def __setitem__(self, key, value):
+        return self.data.__setitem__(self.transform(key), value)
+
+    def __delitem__(self, key):
+        return self.data.__delitem__(self.transform(key))
+
+    def __iter__(self):
+        return self.data.__iter__()
+
+    def __len__(self):
+        return self.data.__len__()
+
+class DimensionCache:
+    """ Caches dimension values to speed up access later on.
+
+    Iterates through the dimensions of the given variable and gets the
+    corresponding objects from the database or creates them if they don't
+    exist. This enables faster lookup, as the database doesn't have to be hit
+    later on and it also enables talking about dimension values in terms of
+    their primary key in the database, which is necessary for fast insertion of
+    `Value`s into the database.
+    """
+    def __init__(self, ds, v, session, classes):
+        d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
+        self.session = session
+        altitude = None
+        height = list(filter(
+            lambda v: v.startswith("height_") and v[-1] == "m",
+            ds.variables.keys()))
+        if height:
+            # Will look like 'height_XYZm'.
+            # Cut off prefix and suffix, convert, extract, and remove.
+            altitude = int(height[0][len('height_'):][:-1])
+
+        click.echo("  Caching dimensions.")
+        epoch = dt(2002, 2, 1, tzinfo=tz.utc)
+
+        def timestamp(index):
+            bounds = [epoch + td(seconds=s) for s in ds['time_bnds'][index]]
+            return {"start": bounds[0], "stop": bounds[1]}
+
+        self.timestamps = Keychanger(
+            data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
+                                 "     Time:",
+                                 classes['Timestamp'],
+                                 timestamp)),
+            transformer=lambda indexes: indexes[d_index['time']])
+
+        def point(key):
+            wkt = WKT('POINT ({} {})'.format(ds['lon'][key], ds['lat'][key]),
+                      srid=4326)
+            return {"point": wkt}
+
+        location_index = list(it.product(*(range(len(ds.variables.get(d, ())))
+                                           for d in ('rlat', 'rlon'))))
+        self.locations = Keychanger(
+            data=dict(zip(location_index,
+                          list(self.cache(location_index, " Location:",
+                               classes['Location'],
+                               point)))),
+            transformer=lambda indexes: tuple(indexes[d_index[d]]
+                                              for d in ('rlat', 'rlon')))
+        self.altitudes = Keychanger(
+            data=ds.variables.get("altitude", [altitude]),
+            transformer=lambda ixs: (0 if not d_index.get('altitude')
+                                       else ixs[d_index['altitude']]))
+
+    def cache(self, indexes, label, cls, kwargs):
+        with click.progressbar(indexes, label=label) as bar:
+            for index in bar:
+                d = kwargs(index)
+                o = (self.session.query(cls).filter_by(**d).one_or_none() or
+                     cls(**d))
+                self.session.add(o)
+                yield(o)
+            self.session.flush()
 
 ### Auxiliary functions needed by more than one command.
 
@@ -89,19 +178,6 @@ def import_nc_file(filepath, classes, session):
     # TODO: The `if` below weeds out variables which are constant with respect
     #       to time. Figure out how to handle and correctly save these.
     if len(vs) > 2: return
-    altitude = None
-    if (len(vs) == 2) and ('height' in vs[1]):
-        # Will look like 'height_XYZm'.
-        # Cut off prefix and suffix, convert, extract, and remove.
-        altitude = int(vs[1][len('height_'):][:-1])
-        vs = vs[:-1]
-    # Generate a dictionary of grid points. This is for performance reasons.
-    # Equality testing on WKT elements is really slow and we need to know
-    # whether a grid point is already in the database or whether we have to
-    # construct a new one.
-    locations = session.query(classes["Location"]).all()
-    grid = {(s.x, s.y): l for l in locations
-                          for s in [to_shape(l.point)]}
     for name in vs:
         ncv = ds[name]
         dbv = session.query(classes['Variable']).get(name) or \
@@ -110,50 +186,24 @@ def import_nc_file(filepath, classes, session):
                                                         None),
                                   description=ncv.long_name)
         session.add(dbv)
-        dims = ncv.dimensions
-        total_size = reduce(lambda x, y: x*y, (ds[d].size for d in dims))
-        d_index = {d: i for i, d in enumerate(dims)}
-        def value_of(variable, indices, *dimensions):
-            """ Returns the value of `variable` at `index` for `dimensions`.
-
-            Uses `d_index` to determine which sub indices of `indices` (which
-            should be a tuple of indices) belongs to `dimensions` and then uses
-            those sub indices to return the appropriate value of `variable` at
-            (the matching sub indices of) `indices`.
-            If no `dimensions` are given, the `variable` name is used as the
-            sole entry in `dimensions`.
-            """
-            dimensions = [variable] if not dimensions else dimensions
-            return ds[variable][tuple(indices[d_index[d]] for d in dimensions)]
-        def getset(d, k, v):
-            """ Returns `d.get(k, v)` and stores `v` at `k` `if not k in d`.
-            """
-            d[k] = d.get(k, v)
-            return d[k]
-        epoch = dt(2002, 2, 1, tzinfo=tz.utc)
+        dcache = DimensionCache(ds, name, session, classes)
+        total_size = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         with click.progressbar(length=total_size,
                                label="     Var.: " + name) as bar:
             for indexes, count in zip(
-                    it.product(*(range(ds[d].size) for d in dims)),
+                    it.product(*(range(ds[d].size) for d in ncv.dimensions)),
                     it.count()):
-                b = value_of('time_bnds', indexes, 'time')
-                if 'altitude' in dims:
-                    altitude = value_of('altitude', indexes)
-                ts = (epoch + td(seconds=b[0]), epoch + td(seconds=b[1]))
-                xy = tuple(value_of(variable, indexes, 'rlat', 'rlon')
-                           for variable in ('lon', 'lat'))
-                wkt = WKT('POINT ({} {})'.format(*xy), srid=4326)
-                location = getset(grid, xy, classes['Location'](point=wkt))
+                altitude = dcache.altitudes[indexes]
+                altitude = None if altitude is None else float(altitude)
                 v = classes['Value'](
-                        altitude=(float(altitude)
-                                  if altitude is not None else None),
+                        altitude=altitude,
                         v=float(ncv[indexes]),
-                        timestamp=classes['Timestamp'](start=ts[0], stop=ts[1]),
-                        location=location,
+                        timestamp=dcache.timestamps[indexes],
+                        location=dcache.locations[indexes],
                         variable=dbv)
                 session.add(v)
                 if count % 1000 == 0:
-                    session.commit()
+                    session.flush()
                     bar.update(1000)
     click.echo("     Done: {}\n".format(filepath))
 
