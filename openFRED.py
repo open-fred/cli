@@ -210,6 +210,7 @@ def import_nc_file(filepath, classes, session):
                     ms = []
                     bar.update(1000)
             session.bulk_insert_mappings(classes['Value'], ms)
+            bar.update(len(ms))
     click.echo("     Done: {}\n".format(filepath))
 
 
