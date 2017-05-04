@@ -170,6 +170,8 @@ def mapped_classes(schema):
 
     return classes
 
+# TODO: The two functions below are prime examples of stuff that can one should
+#       write tests for.
 def maybe(f, o):
     return (None if o is None else f(o))
 
