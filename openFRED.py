@@ -192,25 +192,19 @@ def import_nc_file(filepath, classes, session):
         dcache = DimensionCache(ds, name, session, classes)
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
-        with click.progressbar(length=length,
+        tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
+        with click.progressbar(tuples,
+                               length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
-            ms = []
-            for indexes, count in zip(
-                    it.product(*(range(ds[d].size) for d in ncv.dimensions)),
-                    it.count(1)):
-                ms.append(dict(
+            session.bulk_insert_mappings(classes['Value'],
+                    (dict(
                         altitude=maybe(float, dcache.altitudes[indexes]),
                         v=float(ncv[indexes]),
                         timestamp_id=dcache.timestamps[indexes].id,
                         location_id=dcache.locations[indexes].id,
-                        variable_id=dbv.name))
-                if count % 1000 == 0:
-                    session.bulk_insert_mappings(classes['Value'], ms)
-                    bar.update(len(ms))
-                    ms = []
-            session.bulk_insert_mappings(classes['Value'], ms)
-            bar.update(len(ms))
+                        variable_id=dbv.name)
+                      for indexes in bar))
     click.echo("     Done: {}\n".format(filepath))
 
 
