@@ -192,22 +192,23 @@ def import_nc_file(filepath, classes, session):
         with click.progressbar(length=total_size,
                                label="{: >{}}:".format(
                                    name, 5+len("location")-len(name))) as bar:
+            ms = []
             for indexes, count in zip(
                     it.product(*(range(ds[d].size) for d in ncv.dimensions)),
                     it.count(1)):
                 altitude = dcache.altitudes[indexes]
                 altitude = None if altitude is None else float(altitude)
-                v = classes['Value'](
+                ms.append(dict(
                         altitude=altitude,
                         v=float(ncv[indexes]),
-                        timestamp=dcache.timestamps[indexes],
-                        location=dcache.locations[indexes],
-                        variable=dbv)
-                session.add(v)
+                        timestamp_id=dcache.timestamps[indexes].id,
+                        location_id=dcache.locations[indexes].id,
+                        variable_id=dbv.name))
                 if count % 1000 == 0:
-                    session.flush()
+                    session.bulk_insert_mappings(classes['Value'], ms)
+                    ms = []
                     bar.update(1000)
-            session.flush()
+            session.bulk_insert_mappings(classes['Value'], ms)
     click.echo("     Done: {}\n".format(filepath))
 
 
