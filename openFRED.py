@@ -170,17 +170,8 @@ def mapped_classes(schema):
 
     return classes
 
-# TODO: The two functions below are prime examples of stuff that can one should
-#       write tests for.
 def maybe(f, o):
     return (None if o is None else f(o))
-
-def chunk(iterable, n):
-    """ Divide `iterable` into chunks of size `n` without padding.
-    """
-    iterator = iter(iterable)
-    while True:
-        yield it.islice(iterator, n)
 
 def import_nc_file(filepath, classes, session):
     click.echo("Importing: {}".format(filepath))
@@ -201,19 +192,25 @@ def import_nc_file(filepath, classes, session):
         dcache = DimensionCache(ds, name, session, classes)
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
-        tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
-        with click.progressbar(tuples,
-                               length=length,
+        with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
-            mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
-                             v=float(ncv[indexes]),
-                             timestamp_id=dcache.timestamps[indexes].id,
-                             location_id=dcache.locations[indexes].id,
-                             variable_id=dbv.name)
-                        for indexes in bar)
-            for c in chunk(mappings, 1000):
-                session.bulk_insert_mappings(classes['Value'], c)
+            ms = []
+            for indexes, count in zip(
+                    it.product(*(range(ds[d].size) for d in ncv.dimensions)),
+                    it.count(1)):
+                ms.append(dict(
+                        altitude=maybe(float, dcache.altitudes[indexes]),
+                        v=float(ncv[indexes]),
+                        timestamp_id=dcache.timestamps[indexes].id,
+                        location_id=dcache.locations[indexes].id,
+                        variable_id=dbv.name))
+                if count % 1000 == 0:
+                    session.bulk_insert_mappings(classes['Value'], ms)
+                    bar.update(len(ms))
+                    ms = []
+            session.bulk_insert_mappings(classes['Value'], ms)
+            bar.update(len(ms))
     click.echo("     Done: {}\n".format(filepath))
 
 
