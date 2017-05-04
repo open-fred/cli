@@ -213,8 +213,8 @@ def import_nc_file(filepath, classes, session):
                              location_id=dcache.locations[indexes].id,
                              variable_id=dbv.name)
                         for indexes in bar)
-            for chunk in chunks(mappings, 1000):
-                session.bulk_insert_mappings(classes['Value'], chunk)
+            for c in chunk(mappings, 1000):
+                session.bulk_insert_mappings(classes['Value'], c)
     click.echo("     Done: {}\n".format(filepath))
 
 
