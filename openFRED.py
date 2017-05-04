@@ -170,6 +170,9 @@ def mapped_classes(schema):
 
     return classes
 
+def maybe(f, o):
+    return (None if o is None else f(o))
+
 def import_nc_file(filepath, classes, session):
     click.echo("Importing: {}".format(filepath))
     ds = nc.Dataset(filepath)
@@ -196,10 +199,8 @@ def import_nc_file(filepath, classes, session):
             for indexes, count in zip(
                     it.product(*(range(ds[d].size) for d in ncv.dimensions)),
                     it.count(1)):
-                altitude = dcache.altitudes[indexes]
-                altitude = None if altitude is None else float(altitude)
                 ms.append(dict(
-                        altitude=altitude,
+                        altitude=maybe(float, dcache.altitudes[indexes]),
                         v=float(ncv[indexes]),
                         timestamp_id=dcache.timestamps[indexes].id,
                         location_id=dcache.locations[indexes].id,
