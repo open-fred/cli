@@ -73,7 +73,7 @@ class DimensionCache:
 
         self.timestamps = Keychanger(
             data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
-                                 "     Time:",
+                                 "        Time:",
                                  classes['Timestamp'],
                                  timestamp)),
             transformer=lambda indexes: indexes[d_index['time']])
@@ -87,7 +87,7 @@ class DimensionCache:
                                            for d in ('rlat', 'rlon'))))
         self.locations = Keychanger(
             data=dict(zip(location_index,
-                          list(self.cache(location_index, " Location:",
+                          list(self.cache(location_index, "    Location:",
                                classes['Location'],
                                point)))),
             transformer=lambda indexes: tuple(indexes[d_index[d]]
@@ -188,8 +188,10 @@ def import_nc_file(filepath, classes, session):
         session.add(dbv)
         dcache = DimensionCache(ds, name, session, classes)
         total_size = reduce(multiply, (ds[d].size for d in ncv.dimensions))
+        click.echo("  Importing variable(s).")
         with click.progressbar(length=total_size,
-                               label="     Var.: " + name) as bar:
+                               label="{: >{}}:".format(
+                                   name, 5+len("location")-len(name))) as bar:
             for indexes, count in zip(
                     it.product(*(range(ds[d].size) for d in ncv.dimensions)),
                     it.count()):
