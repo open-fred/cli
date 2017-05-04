@@ -194,7 +194,7 @@ def import_nc_file(filepath, classes, session):
         click.echo("  Importing variable(s).")
         with click.progressbar(length=length,
                                label="{: >{}}:".format(
-                                   name, 5+len("location")-len(name))) as bar:
+                                   name, 4+len("location"))) as bar:
             ms = []
             for indexes, count in zip(
                     it.product(*(range(ds[d].size) for d in ncv.dimensions)),
