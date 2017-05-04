@@ -175,12 +175,11 @@ def mapped_classes(schema):
 def maybe(f, o):
     return (None if o is None else f(o))
 
-def chunk(iterable, n, sentinel=object()):
+def chunk(iterable, n):
     """ Divide `iterable` into chunks of size `n` without padding.
     """
-    args = [iter(iterable)] * n
-    return (it.takewhile(lambda o: o is not sentinel, group)
-            for group in it.zip_longest(*args, fillvalue=sentinel))
+    iterator = iter(iterable)
+    return (it.islice(iterator, n) for _ in it.repeat(None))
 
 def import_nc_file(filepath, classes, session):
     click.echo("Importing: {}".format(filepath))
