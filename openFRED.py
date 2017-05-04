@@ -190,9 +190,9 @@ def import_nc_file(filepath, classes, session):
                                   description=ncv.long_name)
         session.add(dbv)
         dcache = DimensionCache(ds, name, session, classes)
-        total_size = reduce(multiply, (ds[d].size for d in ncv.dimensions))
+        length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         click.echo("  Importing variable(s).")
-        with click.progressbar(length=total_size,
+        with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 5+len("location")-len(name))) as bar:
             ms = []
