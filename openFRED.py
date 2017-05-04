@@ -194,7 +194,7 @@ def import_nc_file(filepath, classes, session):
                                    name, 5+len("location")-len(name))) as bar:
             for indexes, count in zip(
                     it.product(*(range(ds[d].size) for d in ncv.dimensions)),
-                    it.count()):
+                    it.count(1)):
                 altitude = dcache.altitudes[indexes]
                 altitude = None if altitude is None else float(altitude)
                 v = classes['Value'](
@@ -207,6 +207,7 @@ def import_nc_file(filepath, classes, session):
                 if count % 1000 == 0:
                     session.flush()
                     bar.update(1000)
+            session.flush()
     click.echo("     Done: {}\n".format(filepath))
 
 
