@@ -160,25 +160,32 @@ def import_nc_file(filepath, classes, session):
 
 ### The commmands comprising the command line interface.
 @click.group()
-def openFRED():
+@click.pass_context
+def openFRED(context):
     """ The openFRED command line toolbox.
 
     Contains useful commands to work with openFRED related/supplied data.
     """
-    pass
+    context.obj={}
 
 @click.group()
-def db():
+@click.pass_context
+@click.option('--configuration-file', '-c', type=click.Path(exists=True),
+              help=('Specifies an alternative configuration file ' +
+                    'used by `oemof.db`.'))
+def db(context, configuration_file):
     """ Commands to work with openFRED databases.
     """
-    pass
+    if configuration_file is not None:
+        oemof.db.load_config(configuration_file)
+    context.obj['db'] = {'cfg': configuration_file}
 
 @db.command()
 def initialize():
     """ Initialize a database for openFRED data.
 
     Connect to the database specified in the `[openFRED]` section of oemof's
-    `config.ini` and set the database up to hold openFRED data.
+    configuration file and set the database up to hold openFRED data.
     This means that the configured schema is created if it doesn't already
     exists. The same holds for the tables necessary to store openFRED data
     inside the schema.
