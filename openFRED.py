@@ -207,8 +207,8 @@ def import_nc_file(filepath, classes, session):
                         variable_id=dbv.name))
                 if count % 1000 == 0:
                     session.bulk_insert_mappings(classes['Value'], ms)
+                    bar.update(len(ms))
                     ms = []
-                    bar.update(1000)
             session.bulk_insert_mappings(classes['Value'], ms)
             bar.update(len(ms))
     click.echo("     Done: {}\n".format(filepath))
