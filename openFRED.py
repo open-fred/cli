@@ -207,13 +207,12 @@ def import_nc_file(filepath, classes, session):
                                length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
-            mappings = (dict(
-                        altitude=maybe(float, dcache.altitudes[indexes]),
-                        v=float(ncv[indexes]),
-                        timestamp_id=dcache.timestamps[indexes].id,
-                        location_id=dcache.locations[indexes].id,
-                        variable_id=dbv.name)
-                      for indexes in bar)
+            mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
+                             v=float(ncv[indexes]),
+                             timestamp_id=dcache.timestamps[indexes].id,
+                             location_id=dcache.locations[indexes].id,
+                             variable_id=dbv.name)
+                        for indexes in bar)
             for chunk in chunks(mappings, 1000):
                 session.bulk_insert_mappings(classes['Value'], chunk)
     click.echo("     Done: {}\n".format(filepath))
