@@ -205,9 +205,9 @@ def import_nc_file(filepath, classes, session):
                         timestamp_id=dcache.timestamps[indexes].id,
                         location_id=dcache.locations[indexes].id,
                         variable_id=dbv.name))
+                bar.update(1)
                 if count % 1000 == 0:
                     session.bulk_insert_mappings(classes['Value'], ms)
-                    bar.update(len(ms))
                     ms = []
             session.bulk_insert_mappings(classes['Value'], ms)
             bar.update(len(ms))
