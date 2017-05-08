@@ -3,8 +3,8 @@ from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
 from operator import mul as multiply
-import os
 import itertools as it
+import os
 
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from geoalchemy2.shape import to_shape
