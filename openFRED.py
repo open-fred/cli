@@ -178,8 +178,8 @@ def maybe(f, o):
 def chunk(iterable, n):
     """ Divide `iterable` into chunks of size `n` without padding.
     """
-    iterator = iter(iterable)
-    return (it.islice(iterator, n) for _ in it.repeat(None))
+    xs = iter(iterable)
+    return (it.chain((x,), it.islice(xs, n-1)) for x in xs)
 
 def import_nc_file(filepath, classes, session):
     click.echo("Importing: {}".format(filepath))
