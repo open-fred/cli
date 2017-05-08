@@ -75,7 +75,8 @@ class DimensionCache:
             data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
                                  "        Time:",
                                  classes['Timestamp'],
-                                 timestamp)),
+                                 timestamp,
+                                 idonly=True)),
             transformer=lambda indexes: indexes[d_index['time']])
 
         def point(key):
@@ -89,7 +90,8 @@ class DimensionCache:
             data=dict(zip(location_index,
                           list(self.cache(location_index, "    Location:",
                                classes['Location'],
-                               point)))),
+                               point,
+                               idonly=True)))),
             transformer=lambda indexes: tuple(indexes[d_index[d]]
                                               for d in ('rlat', 'rlon')))
         self.altitudes = Keychanger(
@@ -97,15 +99,15 @@ class DimensionCache:
             transformer=lambda ixs: (0 if not d_index.get('altitude')
                                        else ixs[d_index['altitude']]))
 
-    def cache(self, indexes, label, cls, kwargs):
+    def cache(self, indexes, label, cls, kwargs, idonly=False):
         with click.progressbar(indexes, label=label) as bar:
             for index in bar:
                 d = kwargs(index)
                 o = (self.session.query(cls).filter_by(**d).one_or_none() or
                      cls(**d))
                 self.session.add(o)
-                yield(o)
-            self.session.flush()
+                self.session.flush()
+                yield(o.id if idonly else o)
 
 ### Auxiliary functions needed by more than one command.
 
@@ -207,8 +209,8 @@ def import_nc_file(filepath, classes, session):
                                    name, 4+len("location"))) as bar:
             mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
                              v=float(ncv[indexes]),
-                             timestamp_id=dcache.timestamps[indexes].id,
-                             location_id=dcache.locations[indexes].id,
+                             timestamp_id=dcache.timestamps[indexes],
+                             location_id=dcache.locations[indexes],
                              variable_id=dbv.name)
                         for indexes in bar)
             for c in chunk(mappings, 1000):
