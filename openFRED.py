@@ -154,7 +154,8 @@ def mapped_classes(schema):
                        unique=True)})
     # TODO: Handle units.
     map("Variable", classes, {
-            "name": C(Str(255), primary_key=True),
+            "id": C(Int, primary_key=True),
+            "name": C(Str(255), nullable=False, unique=True),
             # TODO: Figure out whether and where this is in the '.nc' files.
             "aggregation": C(Str(255)),
             "description": C(Text),
@@ -193,12 +194,16 @@ def import_nc_file(filepath, classes, session):
     if len(vs) > 2: return
     for name in vs:
         ncv = ds[name]
-        dbv = session.query(classes['Variable']).get(name) or \
+        dbv = session.query(classes['Variable']).filter_by(name=name)\
+              .one_or_none() or \
               classes['Variable'](name=name,
                                   standard_name=getattr(ncv, "standard_name",
                                                         None),
                                   description=ncv.long_name)
         session.add(dbv)
+        session.commit()
+        dbvid = dbv.id
+        session.expunge(dbv)
         dcache = DimensionCache(ds, name, session, classes)
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
@@ -211,7 +216,7 @@ def import_nc_file(filepath, classes, session):
                              v=float(ncv[indexes]),
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
-                             variable_id=dbv.name)
+                             variable_id=dbvid)
                         for indexes in bar)
             for c in chunk(mappings, 1000):
                 session.bulk_insert_mappings(classes['Value'], c)
