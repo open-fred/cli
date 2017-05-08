@@ -301,6 +301,7 @@ def import_(context, paths):
     with db_session(engine) as session:
         for f in filepaths:
             import_nc_file(f, classes, session)
+        click.echo("  Committing.")
         session.commit()
 
 if __name__ == '__main__':
