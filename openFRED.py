@@ -208,8 +208,7 @@ def import_nc_file(filepath, classes, session):
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
-        with click.progressbar(tuples,
-                               length=length,
+        with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
             mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
@@ -217,9 +216,11 @@ def import_nc_file(filepath, classes, session):
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
                              variable_id=dbvid)
-                        for indexes in bar)
+                        for indexes in tuples)
             for c in chunk(mappings, 1000):
-                session.bulk_insert_mappings(classes['Value'], c)
+                l = list(c)
+                session.bulk_insert_mappings(classes['Value'], l)
+                bar.update(len(l))
     click.echo("     Done: {}\n".format(filepath))
 
 
