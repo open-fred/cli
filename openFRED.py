@@ -235,7 +235,12 @@ def db(context, configuration_file, section):
 
 @db.command()
 @click.pass_context
-def initialize(context):
+@click.option("--drop", "-d", type=click.Choice(["schema", "tables"]),
+              help=("Drop the schema/tables prior to initializing the" +
+                    "database.\n" +
+                    "NOTE: Only dropping the tables isn't implemented yet."),
+              default="schema", show_default=True)
+def initialize(context, drop):
     """ Initialize a database for openFRED data.
 
     Connect to the database specified in the `[openFRED]` section of oemof's
@@ -249,6 +254,14 @@ def initialize(context):
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
 
+    if drop == "schema":
+        with engine.connect() as connection:
+            connection.execute(
+                "DROP SCHEMA IF EXISTS {} CASCADE".format(schema))
+    elif drop == "tables":
+        message = ("Sorry, only dropping the tables while still keeping the " +
+                   "schema around isn't supported yet.")
+        raise click.BadOptionUsage(message=message, ctx=context)
     if not schema in inspector.get_schema_names():
         engine.execute(CreateSchema(schema))
 
