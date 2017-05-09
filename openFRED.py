@@ -240,7 +240,7 @@ def db(context, configuration_file, section):
                     "database.\n" +
                     "NOTE: Only dropping the tables isn't implemented yet."),
               default="schema", show_default=True)
-def initialize(context, drop):
+def setup(context, drop):
     """ Initialize a database for openFRED data.
 
     Connect to the database specified in the `[openFRED]` section of oemof's
