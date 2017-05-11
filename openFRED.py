@@ -9,7 +9,8 @@ import os
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from geoalchemy2.shape import to_shape
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Table, Text)
+                        Integer as Int, MetaData, String as Str, Table, Text,
+                        UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.inspection import inspect
@@ -164,12 +165,15 @@ def mapped_classes(schema):
             "id": C(Int, primary_key=True),
             "altitude": C(Float),
             "v": C(Float, nullable=False),
-            "timestamp_id": C(Int, FK(classes["Timestamp"].id)),
+            "timestamp_id": C(Int, FK(classes["Timestamp"].id), nullable=False),
             "timestamp": relationship(classes["Timestamp"], backref='values'),
-            "location_id": C(Int, FK(classes["Location"].id)),
+            "location_id": C(Int, FK(classes["Location"].id), nullable=False),
             "location": relationship(classes["Location"], backref='values'),
-            "variable_id": C(Str(255), FK(classes["Variable"].name)),
-            "variable": relationship(classes["Variable"], backref='values')})
+            "variable_id": C(Str(255), FK(classes["Variable"].name),
+                             nullable=False),
+            "variable": relationship(classes["Variable"], backref='values'),
+            "__table_args__": (UC("timestamp_id", "location_id",
+                                  "variable_id"),)})
 
     return classes
 
