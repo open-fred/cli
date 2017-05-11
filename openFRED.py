@@ -9,7 +9,8 @@ import itertools as it
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from geoalchemy2.shape import to_shape
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Table, Text)
+                        Integer as Int, MetaData, String as Str, Table, Text,
+                        UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.inspection import inspect
@@ -167,7 +168,9 @@ def mapped_classes(schema):
             "location": relationship(classes["Location"], backref='values'),
             "variable_id": C(Str(255), FK(classes["Variable"].name),
                              nullable=False),
-            "variable": relationship(classes["Variable"], backref='values')})
+            "variable": relationship(classes["Variable"], backref='values'),
+            "__table_args__": (UC("timestamp_id", "location_id",
+                                  "variable_id"),)})
 
     return classes
 
