@@ -236,9 +236,8 @@ def db(context, configuration_file, section):
 @db.command()
 @click.pass_context
 @click.option("--drop", "-d", type=click.Choice(["schema", "tables"]),
-              help=("Drop the schema/tables prior to initializing the" +
-                    "database.\n" +
-                    "NOTE: Only dropping the tables isn't implemented yet."),
+              help=("Drop the schema/tables prior to initializing the " +
+                    "database."),
               default="schema", show_default=True)
 def setup(context, drop):
     """ Initialize a database for openFRED data.
@@ -254,18 +253,16 @@ def setup(context, drop):
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
 
+    classes = mapped_classes(schema)
+
     if drop == "schema":
         with engine.connect() as connection:
             connection.execute(
                 "DROP SCHEMA IF EXISTS {} CASCADE".format(schema))
     elif drop == "tables":
-        message = ("Sorry, only dropping the tables while still keeping the " +
-                   "schema around isn't supported yet.")
-        raise click.BadOptionUsage(message=message, ctx=context)
+        classes['__Base__'].metadata.drop_all(engine)
     if not schema in inspector.get_schema_names():
         engine.execute(CreateSchema(schema))
-
-    classes = mapped_classes(schema)
 
     with engine.connect() as connection:
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
