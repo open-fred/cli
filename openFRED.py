@@ -210,8 +210,17 @@ def import_nc_file(filepath, classes, session):
         session.expunge(dbv)
         dcache = DimensionCache(ds, name, session, classes)
         click.echo("  Importing variable(s).")
-        length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
-        tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
+        limits = click.get_current_context().obj['limits']
+        length = reduce(multiply, (min(limits[d][1], ds[d].size) - limits[d][0]
+                                   if d in limits
+                                   else ds[d].size
+                                   for d in ncv.dimensions))
+        def indices(d):
+            if d in limits:
+                return range(limits[d][0], min(limits[d][1], ds[d].size))
+            else:
+                return range(ds[d].size)
+        tuples = it.product(*(indices(d) for d in ncv.dimensions))
         with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
@@ -294,9 +303,17 @@ def setup(context, drop):
 
 @db.command("import")
 @click.pass_context
+@click.option("--limit", "-l", type=click.Tuple((str, int, int)), multiple=True,
+              metavar="DIM, START, STOP",
+              help=("Limits import of DIMension to indices beginning at START"+
+                    " and ending at STOP. This is meant to be used to limit"+
+                    " the import of variables indexed by this dimension" +
+                    " as it means that only variable values indexed by the" +
+                    " dimension's values within the limits will be imported." +
+                    "\nNOTE: The does not (yet) affect the dimension cache."))
 @click.argument('paths', type=click.Path(exists=True), metavar='PATHS',
                 nargs=-1)
-def import_(context, paths):
+def import_(context, limit, paths):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
@@ -304,6 +321,7 @@ def import_(context, paths):
     i.e. each file with the extension '.nc', found is imported.
     If path points to a file, it is imported as is.
     """
+    context.obj['limits'] = {l: (start, stop) for l, start, stop in limit}
     filepaths = []
     for p in paths:
         if os.path.isfile(p):
