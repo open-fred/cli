@@ -13,8 +13,9 @@ from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm.exc import MultipleResultsFound as MRF
 from sqlalchemy.inspection import inspect
-from sqlalchemy.schema import CreateSchema
+from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
 import click
 import netCDF4 as nc
 
@@ -147,8 +148,8 @@ def mapped_classes(schema):
     classes = {"__Base__": Base}
     map("Timestamp", classes, {
             "id": C(Int, primary_key=True),
-            "start": C(DT, nullable=False),
-            "stop": C(DT, nullable=False)})
+            "start": C(DT),
+            "stop": C(DT)})
     map("Location", classes, {
             "id": C(Int, primary_key=True),
             "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
@@ -288,6 +289,29 @@ def setup(context, drop):
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis_topology;")
     classes['__Base__'].metadata.create_all(engine)
+
+    with db_session(engine) as session:
+        timestamps = classes['Timestamp']
+        try:
+            ts = session.query(timestamps)\
+                        .filter_by(start = None, stop = None)\
+                        .one_or_none()
+        except MRF as e:
+           click.echo("Multiple timestamps found which have no `start` " +
+                      "and/or `stop` values.\nAborting.")
+        ts = ts or classes['Timestamp']()
+        session.add(ts)
+        session.flush()
+
+        constraint_name = "singular_null_timestamp_constraint"
+        if not [c for c in timestamps.__table__.constraints
+                  if c.name == constraint_name]:
+            constraint = CheckConstraint(
+                "(id = {}) OR ".format(ts.id) +
+                "(start IS NOT NULL AND stop IS NOT NULL)",
+                name=constraint_name)
+            timestamps.__table__.append_constraint(constraint)
+            session.execute(AddConstraint(constraint))
 
     return classes
 
