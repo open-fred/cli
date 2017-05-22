@@ -145,34 +145,33 @@ def mapped_classes(schema):
 
     classes = {"__Base__": Base}
     map("Timestamp", classes, {
-            "id": C(Int, primary_key=True),
-            "start": C(DT, nullable=False),
-            "stop": C(DT, nullable=False)})
+        "id": C(Int, primary_key=True),
+        "start": C(DT, nullable=False),
+        "stop": C(DT, nullable=False)})
     map("Location", classes, {
-            "id": C(Int, primary_key=True),
-            "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
-                       unique=True)})
+        "id": C(Int, primary_key=True),
+        "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
+                   unique=True)})
     # TODO: Handle units.
     map("Variable", classes, {
-            "id": C(Int, primary_key=True),
-            "name": C(Str(255), nullable=False, unique=True),
-            # TODO: Figure out whether and where this is in the '.nc' files.
-            "aggregation": C(Str(255)),
-            "description": C(Text),
-            "standard_name": C(Str(255))})
+        "id": C(Int, primary_key=True),
+        "name": C(Str(255), nullable=False, unique=True),
+        # TODO: Figure out whether and where this is in the '.nc' files.
+        "aggregation": C(Str(255)),
+        "description": C(Text),
+        "standard_name": C(Str(255))})
     map("Value", classes, {
-            "id": C(Int, primary_key=True),
-            "altitude": C(Float),
-            "v": C(Float, nullable=False),
-            "timestamp_id": C(Int, FK(classes["Timestamp"].id), nullable=False),
-            "timestamp": relationship(classes["Timestamp"], backref='values'),
-            "location_id": C(Int, FK(classes["Location"].id), nullable=False),
-            "location": relationship(classes["Location"], backref='values'),
-            "variable_id": C(Str(255), FK(classes["Variable"].name),
-                             nullable=False),
-            "variable": relationship(classes["Variable"], backref='values'),
-            "__table_args__": (UC("timestamp_id", "location_id",
-                                  "variable_id"),)})
+        "id": C(Int, primary_key=True),
+        "altitude": C(Float),
+        "v": C(Float, nullable=False),
+        "timestamp_id": C(Int, FK(classes["Timestamp"].id), nullable=False),
+        "timestamp": relationship(classes["Timestamp"], backref='values'),
+        "location_id": C(Int, FK(classes["Location"].id), nullable=False),
+        "location": relationship(classes["Location"], backref='values'),
+        "variable_id": C(Str(255), FK(classes["Variable"].name),
+                         nullable=False),
+        "variable": relationship(classes["Variable"], backref='values'),
+        "__table_args__": (UC("timestamp_id", "location_id", "variable_id"),)})
 
     return classes
 
