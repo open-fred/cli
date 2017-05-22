@@ -89,15 +89,15 @@ class DimensionCache:
         self.locations = Keychanger(
             data=dict(zip(location_index,
                           list(self.cache(location_index, "    Location:",
-                               classes['Location'],
-                               point,
-                               idonly=True)))),
+                                          classes['Location'],
+                                          point,
+                                          idonly=True)))),
             transformer=lambda indexes: tuple(indexes[d_index[d]]
                                               for d in ('rlat', 'rlon')))
         self.altitudes = Keychanger(
             data=ds.variables.get("altitude", [altitude]),
-            transformer=lambda ixs: (0 if not d_index.get('altitude')
-                                       else ixs[d_index['altitude']]))
+            transformer=lambda ixs: (0 if not d_index.get('altitude') else
+                                     ixs[d_index['altitude']]))
 
     def cache(self, indexes, label, cls, kwargs, idonly=False):
         with click.progressbar(indexes, label=label) as bar:
