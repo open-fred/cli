@@ -193,7 +193,8 @@ def import_nc_file(filepath, classes, session):
                            ds.variables.keys()))
     # TODO: The `if` below weeds out variables which are constant with respect
     #       to time. Figure out how to handle and correctly save these.
-    if len(vs) > 2: return
+    if len(vs) > 2:
+        return
     for name in vs:
         ncv = ds[name]
         dbv = session.query(classes['Variable']).filter_by(name=name)\
