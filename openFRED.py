@@ -308,7 +308,7 @@ def import_(context, paths):
         if os.path.isfile(p):
             filepaths.append(p)
         elif os.path.isdir(p):
-            for (path, dirs, files) in os.walk(p):
+            for (path, _, files) in os.walk(p):
                 for f in files:
                     if f[-3:] == '.nc':
                         filepaths.append(os.path.join(path, f))
