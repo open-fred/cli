@@ -126,7 +126,7 @@ def db_session(engine):
     finally:
         session.close()
 
-def mapped_classes(schema):
+def mapped_classes(metadata):
     """ Returns classes mapped to the openFRED database via SQLAlchemy.
 
     The classes are dynamically created and stored in a dictionary keyed by
@@ -135,10 +135,12 @@ def mapped_classes(schema):
     which all mapped classes inherit.
     """
 
-    Base = declarative_base(metadata=MetaData(schema=schema))
+    Base = declarative_base(metadata=metadata)
 
     def map(name, registry, namespace):
         namespace["__tablename__"] = "openfred_" + name.lower()
+        namespace["__table_args__"] = (namespace.get("__table_args__", ()) +
+                                       ({"keep_existing": True},))
         if namespace["__tablename__"][-1] != 's':
             namespace["__tablename__"] += 's'
         registry[name] = type(name, (Base,), namespace)
@@ -270,8 +272,8 @@ def setup(context, drop):
     schema = oemof.db.config.get(section, 'schema')
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
-
-    classes = mapped_classes(schema)
+    metadata = MetaData(schema=schema, bind=engine, reflect=(not drop))
+    classes = mapped_classes(schema, metadata)
 
     if drop == "schema":
         with engine.connect() as connection:
