@@ -7,9 +7,8 @@ import itertools as it
 import os
 
 from geoalchemy2 import WKTElement as WKT, types as geotypes
-from geoalchemy2.shape import to_shape
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Table, Text,
+                        Integer as Int, MetaData, String as Str, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
