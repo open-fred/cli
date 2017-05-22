@@ -256,8 +256,7 @@ def db(context, configuration_file, section):
 @click.pass_context
 @click.option("--drop", "-d", type=click.Choice(["schema", "tables"]),
               help=("Drop the schema/tables prior to initializing the " +
-                    "database."),
-              default="schema", show_default=True)
+                    "database."))
 def setup(context, drop):
     """ Initialize a database for openFRED data.
 
