@@ -107,7 +107,7 @@ class DimensionCache:
                      cls(**d))
                 self.session.add(o)
                 self.session.flush()
-                yield(o.id if idonly else o)
+                yield (o.id if idonly else o)
 
 ### Auxiliary functions needed by more than one command.
 
@@ -235,7 +235,7 @@ def openFRED(context):
 
     Contains useful commands to work with openFRED related/supplied data.
     """
-    context.obj={}
+    context.obj = {}
 
 @click.group()
 @click.pass_context
