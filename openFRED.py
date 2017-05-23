@@ -176,7 +176,7 @@ def mapped_classes(schema):
             "timestamp": relationship(classes["Timestamp"], backref='values'),
             "location_id": C(Int, FK(classes["Location"].id), nullable=False),
             "location": relationship(classes["Location"], backref='values'),
-            "variable_id": C(Str(255), FK(classes["Variable"].name),
+            "variable_id": C(Int, FK(classes["Variable"].id),
                              nullable=False),
             "variable": relationship(classes["Variable"], backref='values'),
             "__table_args__": (UC("timestamp_id", "location_id",
