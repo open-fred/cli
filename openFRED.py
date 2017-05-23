@@ -75,12 +75,15 @@ class DimensionCache:
             bounds = [epoch + td(seconds=s) for s in ds['time_bnds'][index]]
             return {"start": bounds[0], "stop": bounds[1]}
 
+        timesteps = ds.variables.get('time', ())
         self.timestamps = Keychanger(
-            data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
+            data=list(self.cache(list(range(len(timesteps))),
                                  "        Time:",
                                  classes['Timestamp'],
                                  timestamp,
-                                 idonly=True)),
+                                 idonly=True))
+                 if len(timesteps) > 1 else
+                 [None],
             transformer=lambda indexes: indexes[d_index['time']])
 
         def point(key):
