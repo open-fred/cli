@@ -1,5 +1,6 @@
 click
 GeoAlchemy2
+alembic
 netCDF4
 oemof
 -e git+https://github.com/oemof/oemof.db.git@dev#egg=oemof.db

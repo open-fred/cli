@@ -6,6 +6,8 @@ from operator import mul as multiply
 import itertools as it
 import os
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from geoalchemy2.shape import to_shape
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
@@ -302,6 +304,13 @@ def setup(context, drop):
         ts = ts or classes['Timestamp']()
         session.add(ts)
         session.flush()
+
+        context = MigrationContext.configure(session.connection())
+        ops = Operations(context)
+        ops.alter_column(table_name=str(classes["Value"].__table__.name),
+                         column_name="timestamp_id",
+                         server_default=str(ts.id),
+                         schema=schema)
 
         constraint_name = "singular_null_timestamp_constraint"
         if not [c for c in timestamps.__table__.constraints
