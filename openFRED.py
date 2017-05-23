@@ -10,6 +10,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from geoalchemy2.shape import to_shape
+from numpy.ma import masked
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
@@ -223,7 +224,8 @@ def import_nc_file(filepath, classes, session):
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
                              variable_id=dbvid)
-                        for indexes in tuples)
+                        for indexes in tuples
+                        if ncv[indexes] is not masked)
             for c in chunk(mappings, 1000):
                 l = list(c)
                 session.bulk_insert_mappings(classes['Value'], l)
