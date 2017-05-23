@@ -1,8 +1,9 @@
-click
 GeoAlchemy2
+Shapely
+SQLAlchemy
+alembic
+click
 netCDF4
 oemof
 -e git+https://github.com/oemof/oemof.db.git@dev#egg=oemof.db
-Shapely
-SQLAlchemy
 

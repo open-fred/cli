@@ -6,14 +6,18 @@ from operator import mul as multiply
 import itertools as it
 import os
 
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
+from numpy.ma import masked
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm.exc import MultipleResultsFound as MRF
 from sqlalchemy.inspection import inspect
-from sqlalchemy.schema import CreateSchema
+from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
 import click
 import netCDF4 as nc
 
@@ -71,12 +75,15 @@ class DimensionCache:
             bounds = [epoch + td(seconds=s) for s in ds['time_bnds'][index]]
             return {"start": bounds[0], "stop": bounds[1]}
 
+        timesteps = ds.variables.get('time', ())
         self.timestamps = Keychanger(
-            data=list(self.cache(list(range(len(ds.variables.get('time', ())))),
+            data=list(self.cache(list(range(len(timesteps))),
                                  "        Time:",
                                  classes['Timestamp'],
                                  timestamp,
-                                 idonly=True)),
+                                 idonly=True))
+                 if len(timesteps) > 1 else
+                 [None],
             transformer=lambda indexes: indexes[d_index['time']])
 
         def point(key):
@@ -148,8 +155,8 @@ def mapped_classes(metadata):
     classes = {"__Base__": Base}
     map("Timestamp", classes, {
         "id": C(Int, primary_key=True),
-        "start": C(DT, nullable=False),
-        "stop": C(DT, nullable=False)})
+        "start": C(DT),
+        "stop": C(DT)})
     map("Location", classes, {
         "id": C(Int, primary_key=True),
         "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
@@ -170,7 +177,7 @@ def mapped_classes(metadata):
         "timestamp": relationship(classes["Timestamp"], backref='values'),
         "location_id": C(Int, FK(classes["Location"].id), nullable=False),
         "location": relationship(classes["Location"], backref='values'),
-        "variable_id": C(Str(255), FK(classes["Variable"].name),
+        "variable_id": C(Int, FK(classes["Variable"].id),
                          nullable=False),
         "variable": relationship(classes["Variable"], backref='values'),
         "__table_args__": (UC("timestamp_id", "location_id", "variable_id"),)})
@@ -193,10 +200,6 @@ def import_nc_file(filepath, classes, session):
     ds = nc.Dataset(filepath)
     vs = list(it.takewhile(lambda x: x not in ['lat', 'altitude'],
                            ds.variables.keys()))
-    # TODO: The `if` below weeds out variables which are constant with respect
-    #       to time. Figure out how to handle and correctly save these.
-    if len(vs) > 2:
-        return
     for name in vs:
         ncv = ds[name]
         dbv = session.query(classes['Variable']).filter_by(name=name)\
@@ -221,7 +224,8 @@ def import_nc_file(filepath, classes, session):
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
                              variable_id=dbvid)
-                        for indexes in tuples)
+                        for indexes in tuples
+                        if ncv[indexes] is not masked)
             for c in chunk(mappings, 1000):
                 l = list(c)
                 session.bulk_insert_mappings(classes['Value'], l)
@@ -273,7 +277,7 @@ def setup(context, drop):
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
     metadata = MetaData(schema=schema, bind=engine, reflect=(not drop))
-    classes = mapped_classes(schema, metadata)
+    classes = mapped_classes(metadata)
 
     if drop == "schema":
         with engine.connect() as connection:
@@ -288,6 +292,36 @@ def setup(context, drop):
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis_topology;")
     classes['__Base__'].metadata.create_all(engine)
+
+    with db_session(engine) as session:
+        timestamps = classes['Timestamp']
+        try:
+            ts = session.query(timestamps)\
+                        .filter_by(start = None, stop = None)\
+                        .one_or_none()
+        except MRF as e:
+           click.echo("Multiple timestamps found which have no `start` " +
+                      "and/or `stop` values.\nAborting.")
+        ts = ts or classes['Timestamp']()
+        session.add(ts)
+        session.flush()
+
+        context = MigrationContext.configure(session.connection())
+        ops = Operations(context)
+        ops.alter_column(table_name=str(classes["Value"].__table__.name),
+                         column_name="timestamp_id",
+                         server_default=str(ts.id),
+                         schema=schema)
+
+        constraint_name = "singular_null_timestamp_constraint"
+        if not [c for c in timestamps.__table__.constraints
+                  if c.name == constraint_name]:
+            constraint = CheckConstraint(
+                "(id = {}) OR ".format(ts.id) +
+                "(start IS NOT NULL AND stop IS NOT NULL)",
+                name=constraint_name)
+            timestamps.__table__.append_constraint(constraint)
+            session.execute(AddConstraint(constraint))
 
     return classes
 
@@ -318,7 +352,7 @@ def import_(context, paths):
     schema = oemof.db.config.get(section, 'schema')
     engine = oemof.db.engine(section)
 
-    classes = mapped_classes(schema)
+    classes = mapped_classes(MetaData(schema=schema))
 
     with db_session(engine) as session:
         for f in filepaths:
