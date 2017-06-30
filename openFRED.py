@@ -144,6 +144,7 @@ def mapped_classes(metadata):
     """
 
     Base = declarative_base(metadata=metadata)
+    classes = {"__Base__": Base}
 
     def map(name, registry, namespace):
         namespace["__tablename__"] = "openfred_" + name.lower()
@@ -153,7 +154,6 @@ def mapped_classes(metadata):
             namespace["__tablename__"] += 's'
         registry[name] = type(name, (Base,), namespace)
 
-    classes = {"__Base__": Base}
     map("Timestamp", classes, {
         "id": C(Int, primary_key=True),
         "start": C(DT),
