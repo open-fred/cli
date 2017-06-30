@@ -10,8 +10,8 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
-from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Text,
+from sqlalchemy import (Column as C, DateTime as DT, ForeignKey as FK,
+                        Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
@@ -20,6 +20,7 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
 import click
 import netCDF4 as nc
+import sqlalchemy as sqla
 
 import oemof.db
 
