@@ -152,7 +152,7 @@ def mapped_classes(metadata):
                                        ({"keep_existing": True},))
         if namespace["__tablename__"][-1] != 's':
             namespace["__tablename__"] += 's'
-        registry[name] = type(name, (Base,), namespace)
+        registry[name] = type(name, (registry["__Base__"],), namespace)
 
     map("Timestamp", classes, {
         "id": C(Int, primary_key=True),
