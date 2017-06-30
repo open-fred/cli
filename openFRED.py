@@ -14,7 +14,7 @@ from sqlalchemy import (Column as C, DateTime as DT, ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import mapper, relationship, sessionmaker
 from sqlalchemy.orm.exc import MultipleResultsFound as MRF
 from sqlalchemy.inspection import inspect
 from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
@@ -170,18 +170,44 @@ def mapped_classes(metadata):
         "aggregation": C(Str(255)),
         "description": C(Text),
         "standard_name": C(Str(255))})
-    map("Value", classes, {
-        "id": C(Int, primary_key=True),
-        "altitude": C(Float),
-        "v": C(Float, nullable=False),
-        "timestamp_id": C(Int, FK(classes["Timestamp"].id), nullable=False),
-        "timestamp": relationship(classes["Timestamp"], backref='values'),
-        "location_id": C(Int, FK(classes["Location"].id), nullable=False),
-        "location": relationship(classes["Location"], backref='values'),
-        "variable_id": C(Int, FK(classes["Variable"].id),
-                         nullable=False),
-        "variable": relationship(classes["Variable"], backref='values'),
-        "__table_args__": (UC("timestamp_id", "location_id", "variable_id"),)})
+    class KWInit:
+      def __init__(self, **ks):
+        for (k, v) in ks.items():
+          setattr(self, k, v)
+
+    values = Table("openfred_values", metadata,
+        C("id", Int, primary_key=True),
+        C("altitude", sqla.Float),
+        C("timestamp_id", Int, FK(classes["Timestamp"].id), nullable=False),
+        C("location_id", Int, FK(classes["Location"].id), nullable=False),
+        C("variable_id", Int, FK(classes["Variable"].id), nullable=False),
+        C("type", Str(17), nullable=False),
+        UC("timestamp_id", "location_id", "variable_id"))
+    class Value(KWInit): pass
+    Value.__table__ = values
+    mapper(Value, values, properties={
+            "timestamp": relationship(classes["Timestamp"], backref='values'),
+            "location": relationship(classes["Location"], backref='values'),
+            "variable": relationship(classes["Variable"], backref='values')},
+           polymorphic_identity="value",
+           polymorphic_on="type")
+    classes["Value"]=Value
+
+    flags = Table("openfred_flags", metadata,
+        C("id", Int, FK(classes["Value"].id), primary_key=True),
+        C("v", Str(255), nullable=False))
+    class Flag(Value): pass
+    Flag.__table__ = flags
+    mapper(Flag, flags, polymorphic_identity="flag")
+    classes["Flag"]=Flag
+
+    floats = Table("openfred_floats", metadata,
+        C("id", Int, FK(classes["Value"].id), primary_key=True),
+        C("v", sqla.Float, nullable=False))
+    class Float(Value): pass
+    Float.__table__ = floats
+    mapper(Float, floats, polymorphic_identity="float")
+    classes["Float"]=Float
 
     return classes
 
@@ -220,8 +246,15 @@ def import_nc_file(filepath, classes, session):
         with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
+            if hasattr(ncv, "flag_values"):
+              mapped_class = classes['Flag']
+              flags = dict(zip(ncv.flag_values, ncv.flag_meanings.split(' ')))
+              convert = lambda v: flags[v]
+            else:
+              mapped_class = classes['Float']
+              convert = float
             mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
-                             v=float(ncv[indexes]),
+                             v=convert(ncv[indexes]),
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
                              variable_id=dbvid)
@@ -229,7 +262,7 @@ def import_nc_file(filepath, classes, session):
                         if ncv[indexes] is not masked)
             for c in chunk(mappings, 1000):
                 l = list(c)
-                session.bulk_insert_mappings(classes['Value'], l)
+                session.bulk_insert_mappings(mapped_class, l)
                 bar.update(len(l))
     click.echo("     Done: {}\n".format(filepath))
 
