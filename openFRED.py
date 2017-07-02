@@ -179,8 +179,7 @@ def mapped_classes(metadata):
         "location": relationship(classes["Location"], backref='values'),
         "variable_id": C(Int, FK(classes["Variable"].id),
                          nullable=False),
-        "variable": relationship(classes["Variable"], backref='values'),
-        "__table_args__": (UC("timestamp_id", "location_id", "variable_id"),)})
+        "variable": relationship(classes["Variable"], backref='values')})
 
     return classes
 
