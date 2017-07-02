@@ -175,6 +175,7 @@ def mapped_classes(metadata):
         __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
                           {"keep_existing": True})
         id = C(Int, primary_key=True)
+        v = C(Float, nullable=False)
         altitude = C(Float)
         timestamp_id = C(Int, FK(classes["Timestamp"].id), nullable=False)
         location_id = C(Int, FK(classes["Location"].id), nullable=False)
@@ -182,32 +183,7 @@ def mapped_classes(metadata):
         timestamp = relationship(classes["Timestamp"], backref='values')
         location = relationship(classes["Location"], backref='values')
         variable = relationship(classes["Variable"], backref='values')
-        __mapper_args_ = {"polymorphic_identity": "value",
-                          "polymorphic_on": "type"}
     classes["Value"]=Value
-
-    class Flag(Value):
-        def __init__(self, *xs, **ks):
-          click.echo("super().id = {}".format(super().id))
-          super().__init__(*xs, **ks)
-          self.id = super().id
-        __tablename__ = "openfred_flags"
-        __table_args__ = ({"keep_existing": True},)
-        id = C(Int, FK(classes["Value"].id), primary_key=True)
-        v = C(Str(255), nullable=False)
-        __mapper_args_ = {"polymorphic_identity": "flag"}
-    classes["Flag"]=Flag
-
-    class Float(Value):
-        def __init__(self, *xs, **ks):
-          super().__init__(*xs, **ks)
-          self.id = super().id
-        __tablename__ = "openfred_floats"
-        __table_args__ = ({"keep_existing": True},)
-        id = C(Int, FK(classes["Value"].id), primary_key=True)
-        v = C(sqla.Float, nullable=False)
-        __mapper_args_ = {"polymorphic_identity": "float"}
-    classes["Float"]=Float
 
     return classes
 
@@ -246,23 +222,17 @@ def import_nc_file(filepath, classes, session):
         with click.progressbar(length=length,
                                label="{: >{}}:".format(
                                    name, 4+len("location"))) as bar:
-            if hasattr(ncv, "flag_values"):
-              mapped_class = classes['Flag']
-              flags = dict(zip(ncv.flag_values, ncv.flag_meanings.split(' ')))
-              convert = lambda v: flags[v]
-            else:
-              mapped_class = classes['Float']
-              convert = float
             mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
-                             v=convert(ncv[indexes]),
+                             v=float(ncv[indexes]),
                              timestamp_id=dcache.timestamps[indexes],
                              location_id=dcache.locations[indexes],
                              variable_id=dbvid)
                         for indexes in tuples
                         if ncv[indexes] is not masked)
+            mapper = classes['Value']
             for c in chunk(mappings, 1000):
                 l = list(c)
-                session.bulk_insert_mappings(mapped_class, l)
+                session.bulk_insert_mappings(mapper, l)
                 bar.update(len(l))
     click.echo("     Done: {}\n".format(filepath))
 
