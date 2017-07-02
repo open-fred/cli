@@ -170,43 +170,44 @@ def mapped_classes(metadata):
         "aggregation": C(Str(255)),
         "description": C(Text),
         "standard_name": C(Str(255))})
-    class KWInit:
-      def __init__(self, **ks):
-        for (k, v) in ks.items():
-          setattr(self, k, v)
 
-    values = Table("openfred_values", metadata,
-        C("id", Int, primary_key=True),
-        C("altitude", sqla.Float),
-        C("timestamp_id", Int, FK(classes["Timestamp"].id), nullable=False),
-        C("location_id", Int, FK(classes["Location"].id), nullable=False),
-        C("variable_id", Int, FK(classes["Variable"].id), nullable=False),
-        C("type", Str(17), nullable=False),
-        UC("timestamp_id", "location_id", "variable_id"))
-    class Value(KWInit): pass
-    Value.__table__ = values
-    mapper(Value, values, properties={
-            "timestamp": relationship(classes["Timestamp"], backref='values'),
-            "location": relationship(classes["Location"], backref='values'),
-            "variable": relationship(classes["Variable"], backref='values')},
-           polymorphic_identity="value",
-           polymorphic_on="type")
+    class Value(Base):
+        __tablename__ = "openfred_values"
+        __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
+                          {"keep_existing": True})
+        id = C(Int, primary_key=True)
+        altitude = C(sqla.Float)
+        timestamp_id = C(Int, FK(classes["Timestamp"].id), nullable=False)
+        location_id = C(Int, FK(classes["Location"].id), nullable=False)
+        variable_id = C(Int, FK(classes["Variable"].id), nullable=False)
+        timestamp = relationship(classes["Timestamp"], backref='values')
+        location = relationship(classes["Location"], backref='values')
+        variable = relationship(classes["Variable"], backref='values')
+        __mapper_args_ = {"polymorphic_identity": "value",
+                          "polymorphic_on": "type"}
     classes["Value"]=Value
 
-    flags = Table("openfred_flags", metadata,
-        C("id", Int, FK(classes["Value"].id), primary_key=True),
-        C("v", Str(255), nullable=False))
-    class Flag(Value): pass
-    Flag.__table__ = flags
-    mapper(Flag, flags, polymorphic_identity="flag")
+    class Flag(Value):
+        def __init__(self, *xs, **ks):
+          click.echo("super().id = {}".format(super().id))
+          super().__init__(*xs, **ks)
+          self.id = super().id
+        __tablename__ = "openfred_flags"
+        __table_args__ = ({"keep_existing": True},)
+        id = C(Int, FK(classes["Value"].id), primary_key=True)
+        v = C(Str(255), nullable=False)
+        __mapper_args_ = {"polymorphic_identity": "flag"}
     classes["Flag"]=Flag
 
-    floats = Table("openfred_floats", metadata,
-        C("id", Int, FK(classes["Value"].id), primary_key=True),
-        C("v", sqla.Float, nullable=False))
-    class Float(Value): pass
-    Float.__table__ = floats
-    mapper(Float, floats, polymorphic_identity="float")
+    class Float(Value):
+        def __init__(self, *xs, **ks):
+          super().__init__(*xs, **ks)
+          self.id = super().id
+        __tablename__ = "openfred_floats"
+        __table_args__ = ({"keep_existing": True},)
+        id = C(Int, FK(classes["Value"].id), primary_key=True)
+        v = C(sqla.Float, nullable=False)
+        __mapper_args_ = {"polymorphic_identity": "float"}
     classes["Float"]=Float
 
     return classes
