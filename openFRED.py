@@ -10,7 +10,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
-from sqlalchemy import (Column as C, DateTime as DT, ForeignKey as FK,
+from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.ext.declarative import declarative_base
@@ -20,7 +20,6 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
 import click
 import netCDF4 as nc
-import sqlalchemy as sqla
 
 import oemof.db
 
@@ -176,7 +175,7 @@ def mapped_classes(metadata):
         __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
                           {"keep_existing": True})
         id = C(Int, primary_key=True)
-        altitude = C(sqla.Float)
+        altitude = C(Float)
         timestamp_id = C(Int, FK(classes["Timestamp"].id), nullable=False)
         location_id = C(Int, FK(classes["Location"].id), nullable=False)
         variable_id = C(Int, FK(classes["Variable"].id), nullable=False)
