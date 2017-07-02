@@ -162,13 +162,17 @@ def mapped_classes(metadata):
         "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
                    unique=True)})
     # TODO: Handle units.
-    map("Variable", classes, {
-        "id": C(Int, primary_key=True),
-        "name": C(Str(255), nullable=False, unique=True),
+    class Variable(Base):
+        __table_args__ = ({"keep_existing": True},)
+        __tablename__ = "openfred_variables"
+        id = C(Int, primary_key=True)
+        name = C(Str(255), nullable=False, unique=True)
         # TODO: Figure out whether and where this is in the '.nc' files.
-        "aggregation": C(Str(255)),
-        "description": C(Text),
-        "standard_name": C(Str(255))})
+        aggregation = C(Str(255))
+        description = C(Text)
+        standard_name = C(Str(255))
+    classes["Variable"]=Variable
+
 
     class Value(Base):
         __tablename__ = "openfred_values"
