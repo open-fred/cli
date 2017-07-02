@@ -13,6 +13,7 @@ from numpy.ma import masked
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker
 from sqlalchemy.orm.exc import MultipleResultsFound as MRF
@@ -168,11 +169,26 @@ def mapped_classes(metadata):
         id = C(Int, primary_key=True)
         name = C(Str(255), nullable=False, unique=True)
         # TODO: Figure out whether and where this is in the '.nc' files.
+        type = C(Str(37))
         aggregation = C(Str(255))
         description = C(Text)
         standard_name = C(Str(255))
+        __mapper_args_ = {"polymorphic_identity": "variable",
+                          "polymorphic_on": type}
     classes["Variable"]=Variable
 
+    class Flags(Variable):
+        __table_args__ = ({"keep_existing": True},)
+        __tablename__ = "openfred_flags"
+        id = C(Int, FK(Variable.id), primary_key=True)
+        flag_ks = C(ARRAY(Int), nullable=False)
+        flag_vs = C(ARRAY(Str(37)), nullable=False)
+        __mapper_args_ = {"polymorphic_identity": "flags"}
+        @property
+        def flag(self, key):
+              flags = dict(zip(self.flag_ks, self.flag_vs))
+              return flags[key]
+    classes["Flags"]=Flags
 
     class Value(Base):
         __tablename__ = "openfred_values"
@@ -209,12 +225,19 @@ def import_nc_file(filepath, classes, session):
                            ds.variables.keys()))
     for name in vs:
         ncv = ds[name]
-        dbv = session.query(classes['Variable']).filter_by(name=name)\
+        if hasattr(ncv, "flag_values"):
+          variable = classes['Flags']
+          kws = {"flag_ks": [int(v) for v in ncv.flag_values],
+                 "flag_vs": ncv.flag_meanings}
+        else:
+          variable = classes['Variable']
+          kws = {}
+        dbv = session.query(variable).filter_by(name=name)\
               .one_or_none() or \
-              classes['Variable'](name=name,
-                                  standard_name=getattr(ncv, "standard_name",
+              variable(name=name, standard_name=getattr(ncv, "standard_name",
                                                         None),
-                                  description=ncv.long_name)
+                       description=ncv.long_name,
+                       **kws)
         session.add(dbv)
         session.commit()
         dbvid = dbv.id
