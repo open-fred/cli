@@ -11,10 +11,11 @@ from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
 from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Text,
+                        Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import mapper, relationship, sessionmaker
 from sqlalchemy.orm.exc import MultipleResultsFound as MRF
 from sqlalchemy.inspection import inspect
 from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
@@ -143,6 +144,7 @@ def mapped_classes(metadata):
     """
 
     Base = declarative_base(metadata=metadata)
+    classes = {"__Base__": Base}
 
     def map(name, registry, namespace):
         namespace["__tablename__"] = "openfred_" + name.lower()
@@ -150,9 +152,8 @@ def mapped_classes(metadata):
                                        ({"keep_existing": True},))
         if namespace["__tablename__"][-1] != 's':
             namespace["__tablename__"] += 's'
-        registry[name] = type(name, (Base,), namespace)
+        registry[name] = type(name, (registry["__Base__"],), namespace)
 
-    classes = {"__Base__": Base}
     map("Timestamp", classes, {
         "id": C(Int, primary_key=True),
         "start": C(DT),
@@ -162,24 +163,47 @@ def mapped_classes(metadata):
         "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
                    unique=True)})
     # TODO: Handle units.
-    map("Variable", classes, {
-        "id": C(Int, primary_key=True),
-        "name": C(Str(255), nullable=False, unique=True),
+    class Variable(Base):
+        __table_args__ = ({"keep_existing": True},)
+        __tablename__ = "openfred_variables"
+        id = C(Int, primary_key=True)
+        name = C(Str(255), nullable=False, unique=True)
         # TODO: Figure out whether and where this is in the '.nc' files.
-        "aggregation": C(Str(255)),
-        "description": C(Text),
-        "standard_name": C(Str(255))})
-    map("Value", classes, {
-        "id": C(Int, primary_key=True),
-        "altitude": C(Float),
-        "v": C(Float, nullable=False),
-        "timestamp_id": C(Int, FK(classes["Timestamp"].id), nullable=False),
-        "timestamp": relationship(classes["Timestamp"], backref='values'),
-        "location_id": C(Int, FK(classes["Location"].id), nullable=False),
-        "location": relationship(classes["Location"], backref='values'),
-        "variable_id": C(Int, FK(classes["Variable"].id),
-                         nullable=False),
-        "variable": relationship(classes["Variable"], backref='values')})
+        type = C(Str(37))
+        aggregation = C(Str(255))
+        description = C(Text)
+        standard_name = C(Str(255))
+        __mapper_args_ = {"polymorphic_identity": "variable",
+                          "polymorphic_on": type}
+    classes["Variable"]=Variable
+
+    class Flags(Variable):
+        __table_args__ = ({"keep_existing": True},)
+        __tablename__ = "openfred_flags"
+        id = C(Int, FK(Variable.id), primary_key=True)
+        flag_ks = C(ARRAY(Int), nullable=False)
+        flag_vs = C(ARRAY(Str(37)), nullable=False)
+        __mapper_args_ = {"polymorphic_identity": "flags"}
+        @property
+        def flag(self, key):
+              flags = dict(zip(self.flag_ks, self.flag_vs))
+              return flags[key]
+    classes["Flags"]=Flags
+
+    class Value(Base):
+        __tablename__ = "openfred_values"
+        __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
+                          {"keep_existing": True})
+        id = C(Int, primary_key=True)
+        v = C(Float, nullable=False)
+        altitude = C(Float)
+        timestamp_id = C(Int, FK(classes["Timestamp"].id), nullable=False)
+        location_id = C(Int, FK(classes["Location"].id), nullable=False)
+        variable_id = C(Int, FK(classes["Variable"].id), nullable=False)
+        timestamp = relationship(classes["Timestamp"], backref='values')
+        location = relationship(classes["Location"], backref='values')
+        variable = relationship(classes["Variable"], backref='values')
+    classes["Value"]=Value
 
     return classes
 
@@ -201,12 +225,19 @@ def import_nc_file(filepath, classes, session):
                            ds.variables.keys()))
     for name in vs:
         ncv = ds[name]
-        dbv = session.query(classes['Variable']).filter_by(name=name)\
+        if hasattr(ncv, "flag_values"):
+          variable = classes['Flags']
+          kws = {"flag_ks": [int(v) for v in ncv.flag_values],
+                 "flag_vs": ncv.flag_meanings}
+        else:
+          variable = classes['Variable']
+          kws = {}
+        dbv = session.query(variable).filter_by(name=name)\
               .one_or_none() or \
-              classes['Variable'](name=name,
-                                  standard_name=getattr(ncv, "standard_name",
+              variable(name=name, standard_name=getattr(ncv, "standard_name",
                                                         None),
-                                  description=ncv.long_name)
+                       description=ncv.long_name,
+                       **kws)
         session.add(dbv)
         session.commit()
         dbvid = dbv.id
@@ -225,9 +256,10 @@ def import_nc_file(filepath, classes, session):
                              variable_id=dbvid)
                         for indexes in tuples
                         if ncv[indexes] is not masked)
+            mapper = classes['Value']
             for c in chunk(mappings, 1000):
                 l = list(c)
-                session.bulk_insert_mappings(classes['Value'], l)
+                session.bulk_insert_mappings(mapper, l)
                 bar.update(len(l))
     click.echo("     Done: {}\n".format(filepath))
 
