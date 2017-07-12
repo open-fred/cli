@@ -244,6 +244,7 @@ def import_nc_file(filepath, classes, session):
         dbvid = dbv.id
         session.expunge(dbv)
         dcache = DimensionCache(ds, name, session, classes)
+        session.commit()
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
