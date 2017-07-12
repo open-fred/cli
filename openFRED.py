@@ -157,7 +157,8 @@ def mapped_classes(metadata):
     map("Timestamp", classes, {
         "id": C(Int, primary_key=True),
         "start": C(DT),
-        "stop": C(DT)})
+        "stop": C(DT),
+        "__table_args__": (UC("start", "stop"),)})
     map("Location", classes, {
         "id": C(Int, primary_key=True),
         "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
