@@ -84,13 +84,13 @@ class DimensionCache:
 
         timesteps = ds.variables.get('time', ())
         self.timestamps = Keychanger(
-            data=list(self.cache(list(range(len(timesteps))),
-                                 "        Time:",
-                                 classes['Timestamp'],
-                                 timestamp,
-                                 idonly=True))
-                 if len(timesteps) > 1 else
-                 [None],
+            data=(list(self.cache(list(range(len(timesteps))),
+                                  "        Time:",
+                                  classes['Timestamp'],
+                                  timestamp,
+                                  idonly=True))
+                  if len(timesteps) > 1 else
+                  [None]),
             transformer=lambda indexes: indexes[d_index['time']])
 
         def point(key):
@@ -182,7 +182,7 @@ def mapped_classes(metadata):
         standard_name = C(Str(255))
         __mapper_args_ = {"polymorphic_identity": "variable",
                           "polymorphic_on": type}
-    classes["Variable"]=Variable
+    classes["Variable"] = Variable
 
     class Flags(Variable):
         __table_args__ = ({"keep_existing": True},)
@@ -193,9 +193,9 @@ def mapped_classes(metadata):
         __mapper_args_ = {"polymorphic_identity": "flags"}
         @property
         def flag(self, key):
-              flags = dict(zip(self.flag_ks, self.flag_vs))
-              return flags[key]
-    classes["Flags"]=Flags
+            flags = dict(zip(self.flag_ks, self.flag_vs))
+            return flags[key]
+    classes["Flags"] = Flags
 
     class Value(Base):
         __tablename__ = "openfred_values"
@@ -210,7 +210,7 @@ def mapped_classes(metadata):
         timestamp = relationship(classes["Timestamp"], backref='values')
         location = relationship(classes["Location"], backref='values')
         variable = relationship(classes["Variable"], backref='values')
-    classes["Value"]=Value
+    classes["Value"] = Value
 
     return classes
 
@@ -246,12 +246,12 @@ def import_nc_file(filepath, variables, classes, session):
     for name in vs:
         ncv = ds[name]
         if hasattr(ncv, "flag_values"):
-          variable = classes['Flags']
-          kws = {"flag_ks": [int(v) for v in ncv.flag_values],
-                 "flag_vs": ncv.flag_meanings}
+            variable = classes['Flags']
+            kws = {"flag_ks": [int(v) for v in ncv.flag_values],
+                   "flag_vs": ncv.flag_meanings}
         else:
-          variable = classes['Variable']
-          kws = {}
+            variable = classes['Variable']
+            kws = {}
         dbv = session.query(variable).filter_by(name=name)\
               .one_or_none() or \
               variable(name=name, standard_name=getattr(ncv, "standard_name",
@@ -349,11 +349,11 @@ def setup(context, drop):
         timestamps = classes['Timestamp']
         try:
             ts = session.query(timestamps)\
-                        .filter_by(start = None, stop = None)\
+                        .filter_by(start=None, stop=None)\
                         .one_or_none()
         except MRF as e:
-           click.echo("Multiple timestamps found which have no `start` " +
-                      "and/or `stop` values.\nAborting.")
+            click.echo("Multiple timestamps found which have no `start` " +
+                       "and/or `stop` values.\nAborting.")
         ts = ts or classes['Timestamp']()
         session.add(ts)
         session.flush()
@@ -382,7 +382,12 @@ def setup(context, drop):
 @click.pass_context
 @click.argument('paths', type=click.Path(exists=True), metavar='PATHS',
                 nargs=-1)
-def import_(context, paths):
+@click.option('--variables', '-V', metavar='VARIABLES', multiple=True,
+              help=('Specify the variable to import. Can be specified ' +
+                    'multiple times. If not specified, a custom ' +
+                    '(as of now wonky, hacky and probably buggy) ' +
+                    'detection scheme ist used.'))
+def import_(context, paths, variables):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
