@@ -72,8 +72,14 @@ class DimensionCache:
         click.echo("  Caching dimensions.")
         epoch = dt(2002, 2, 1, tzinfo=tz.utc)
 
+        # TODO: Ask Ronny about the meaning of timestamps without bounds.
+        #       Is it the previous hour or the next one and how does one figure
+        #       out the resolution.
         def timestamp(index):
-            bounds = [epoch + td(seconds=s) for s in ds['time_bnds'][index]]
+            bounds = ([epoch + td(seconds=s) for s in ds['time_bnds'][index]]
+                      if (('time_bnds' in ds.dimensions.keys()) or
+                          ('time_bnds' in ds.variables.keys()))
+                      else [epoch + td(seconds=ds['time'][index])] * 2)
             return {"start": bounds[0], "stop": bounds[1]}
 
         timesteps = ds.variables.get('time', ())
