@@ -10,7 +10,8 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
-from sqlalchemy import (Column as C, DateTime as DT, Float, ForeignKey as FK,
+from sqlalchemy import (BigInteger as BI, Column as C, DateTime as DT, Float,
+                        ForeignKey as FK,
                         Integer as Int, MetaData, String as Str, Table, Text,
                         UniqueConstraint as UC)
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -161,19 +162,19 @@ def mapped_classes(metadata):
         registry[name] = type(name, (registry["__Base__"],), namespace)
 
     map("Timestamp", classes, {
-        "id": C(Int, primary_key=True),
+        "id": C(BI, primary_key=True),
         "start": C(DT),
         "stop": C(DT),
         "__table_args__": (UC("start", "stop"),)})
     map("Location", classes, {
-        "id": C(Int, primary_key=True),
+        "id": C(BI, primary_key=True),
         "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
                    unique=True)})
     # TODO: Handle units.
     class Variable(Base):
         __table_args__ = ({"keep_existing": True},)
         __tablename__ = "openfred_variables"
-        id = C(Int, primary_key=True)
+        id = C(BI, primary_key=True)
         name = C(Str(255), nullable=False, unique=True)
         # TODO: Figure out whether and where this is in the '.nc' files.
         type = C(Str(37))
@@ -187,7 +188,7 @@ def mapped_classes(metadata):
     class Flags(Variable):
         __table_args__ = ({"keep_existing": True},)
         __tablename__ = "openfred_flags"
-        id = C(Int, FK(Variable.id), primary_key=True)
+        id = C(BI, FK(Variable.id), primary_key=True)
         flag_ks = C(ARRAY(Int), nullable=False)
         flag_vs = C(ARRAY(Str(37)), nullable=False)
         __mapper_args_ = {"polymorphic_identity": "flags"}
@@ -201,12 +202,12 @@ def mapped_classes(metadata):
         __tablename__ = "openfred_values"
         __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
                           {"keep_existing": True})
-        id = C(Int, primary_key=True)
+        id = C(BI, primary_key=True)
         v = C(Float, nullable=False)
         altitude = C(Float)
-        timestamp_id = C(Int, FK(classes["Timestamp"].id), nullable=False)
-        location_id = C(Int, FK(classes["Location"].id), nullable=False)
-        variable_id = C(Int, FK(classes["Variable"].id), nullable=False)
+        timestamp_id = C(BI, FK(classes["Timestamp"].id), nullable=False)
+        location_id = C(BI, FK(classes["Location"].id), nullable=False)
+        variable_id = C(BI, FK(classes["Variable"].id), nullable=False)
         timestamp = relationship(classes["Timestamp"], backref='values')
         location = relationship(classes["Location"], backref='values')
         variable = relationship(classes["Variable"], backref='values')
