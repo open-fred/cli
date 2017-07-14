@@ -225,7 +225,7 @@ def chunk(iterable, n):
     xs = iter(iterable)
     return (it.chain((x,), it.islice(xs, n-1)) for x in xs)
 
-def import_nc_file(filepath, classes, session):
+def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
     ds = nc.Dataset(filepath)
     #TODO: Figure out a better way to filter variables
@@ -239,8 +239,10 @@ def import_nc_file(filepath, classes, session):
     #       Also: detect variable names with a `_XYm` suffix and rename and
     #             set altitude apropriately.
 
-    vs = list(it.takewhile(lambda x: x not in ['lat', 'altitude'],
-                           ds.variables.keys()))
+    vs = ([v for v in variables if v in ds.variables.keys()]
+          if variables
+          else list(it.takewhile(lambda x: x not in ['lat', 'altitude'],
+                                 ds.variables.keys())))
     for name in vs:
         ncv = ds[name]
         if hasattr(ncv, "flag_values"):
@@ -406,7 +408,7 @@ def import_(context, paths):
 
     with db_session(engine) as session:
         for f in filepaths:
-            import_nc_file(f, classes, session)
+            import_nc_file(f, variables, classes, session)
         click.echo("  Committing.")
         session.commit()
 
