@@ -229,21 +229,14 @@ def chunk(iterable, n):
 def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
     ds = nc.Dataset(filepath)
-    #TODO: Figure out a better way to filter variables
-    #      (vs. dimensions and other stuff).
-    #      Possible strategies:
-    #
-    #       * Variables are named in ALL_CAPS (with underscores and numbers)
-    #       * Variables have a nonempty `.dimensions` tuple
-    #       * Variables have SPECIFIC values in their `.dimensions` tuple
-    #
-    #       Also: detect variable names with a `_XYm` suffix and rename and
-    #             set altitude apropriately.
+    #TODO: Detect variable names with a `_XYm` suffix and rename and
+    #      set altitude apropriately.
 
     vs = ([v for v in variables if v in ds.variables.keys()]
           if variables
-          else list(it.takewhile(lambda x: x not in ['lat', 'altitude'],
-                                 ds.variables.keys())))
+          else [v for v in ds.variables.keys()
+                  if hasattr(ds.variables[v], 'coordinates')])
+
     for name in vs:
         ncv = ds[name]
         if hasattr(ncv, "flag_values"):
