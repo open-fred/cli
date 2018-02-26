@@ -406,7 +406,7 @@ def import_(context, paths, variables):
     classes = mapped_classes(MetaData(schema=schema))
 
     with db_session(engine) as session:
-        for f in filepaths:
+        for f in sorted(filepaths):
             import_nc_file(f, variables, classes, session)
         click.echo("  Committing.")
         session.commit()
