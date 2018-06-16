@@ -1,0 +1,82 @@
+from glob import glob, iglob
+from itertools import chain
+from pprint import pprint as pp
+from tempfile import TemporaryDirectory as TD, mkdtemp
+from subprocess import call
+import os
+import os.path as osp
+import re
+import sys
+import tarfile
+
+import xarray as xr
+
+
+def merge(variable, tar, store):
+    with TD() as tmp:
+        members = tar.getmembers()
+        netcdfs = []
+        for member in members:
+            if not variable in member.name:
+                continue
+            print("Handling {}.".format(member.name))
+            netcdfs.append(member.name)
+            tar.extractall(tmp, members=[member])
+            path = osp.join(tmp, member.name)
+            fix_height = re.search("WSS_10M|WDIRlat_10M", member.name)
+            if fix_height:
+                print("Fixing height.")
+                call(["python", osp.join(sys.argv[1], "add_dimension.py"),
+                    "-n", fix_height.group(), "-d", "height",
+                    "-i", "10", "-r", fix_height.group()[:-4],
+                    path, osp.join(tmp, "fixed")])
+                call(["mv", osp.join(tmp, "fixed"), path])
+        netcdfs = [osp.join(tmp, f) for f in netcdfs]
+        print("Merging:")
+        pp(netcdfs)
+        target = osp.join(store, "{}.nc".format(variable))
+        print("--> {}".format(target))
+        call(["cdo", "merge"] +
+                netcdfs +
+                [target])
+    return target
+
+
+if __name__ == "__main__":
+
+    """ Variables:
+    "WSS_zlevel", "T_zlevel", "P_zlevel", "Z0", "WDIRlat_zlevel",
+    "ASWDIFD_S", "ASWDIR_S", "ASWDIR_NS2"
+    """
+
+    variables = [s.strip() for s in sys.argv[3].split(",")]
+    with TD() as tmp:
+        tars = list(tarfile.open(tar)
+                for tar in iglob(osp.join(sys.argv[1], "*.tar")))
+        for tar in tars:
+            year = re.search("(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
+            merged = []
+            for variable in variables:
+                merged.append(merge(variable, tar, tmp))
+            print("Merging:")
+            pp(merged)
+            mergetarget = osp.join(tmp, "merged.nc")
+            print("--> {}".format(mergetarget))
+            call(["cdo", "merge"] +
+                merged +
+                [mergetarget])
+            call(["rm", "-r"] + merged)
+            compresstarget = "{}-{}.nc".format(sys.argv[2], year)
+            print("Compressing to '{}'.".format(compresstarget))
+            ds = xr.open_dataset(mergetarget)
+            for dv in ds.data_vars:
+                if dv[0].isupper():
+                    ds.data_vars[dv].encoding['least_significant_digit'] = 3
+            ds.to_netcdf(compresstarget,
+                    format='NETCDF4',
+                    encoding={
+                        v: {'complevel': 9, 'zlib': True}
+                        for v in list(ds.variables)})
+            ds.close()
+            call(["rm", "-r", mergetarget])
+
