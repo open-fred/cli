@@ -68,9 +68,17 @@ def merge(variable, tar, store):
         pp(netcdfs)
         target = osp.join(store, "{}.nc".format(variable))
         print("--> {}".format(target))
-        call(["cdo", "merge"] +
-                netcdfs +
-                [target])
+        current = netcdfs[0]
+        for to_merge in netcdfs[1:]:
+            print(to_merge)
+            cds = xr.open_dataset(current, decode_cf=False)
+            tds = xr.open_dataset(to_merge, decode_cf=False)
+            mds = xr.merge((d[v] for d in [cds, tds] for v in d.data_vars))
+            mds.to_netcdf(target + ".tmp", format='NETCDF4')
+            for d in [cds, tds, mds]:
+                d.close()
+            call(["mv", target + ".tmp", target])
+            current = target
     return target
 
 
