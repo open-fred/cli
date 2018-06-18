@@ -20,6 +20,10 @@ sys.argv[3]: str, comma separated list of variables
     The argument is split by occurrences of "," and the results have any
     surrounding whitespace removed. The result is then treated as the list of
     variables eligible for a merge.
+sys.argv[4]: regular expression
+    A pattern to further limit the file names the script actually handles.
+    Useful during development to not act on more files than absolutely
+    necessary.
 """
 
 from glob import glob, iglob
@@ -80,7 +84,8 @@ if __name__ == "__main__":
     variables = [s.strip() for s in sys.argv[3].split(",")]
     with TD() as tmp:
         tars = list(tarfile.open(tar)
-                for tar in iglob(osp.join(sys.argv[1], "*.tar")))
+                for tar in iglob(osp.join(sys.argv[1], "*.tar"))
+                if re.search(sys.argv[4], tar))
         for tar in tars:
             year = re.search("(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
             merged = []
