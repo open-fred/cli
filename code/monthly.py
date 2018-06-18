@@ -95,9 +95,10 @@ if __name__ == "__main__":
             pp(merged)
             mergetarget = osp.join(tmp, "merged.nc")
             print("--> {}".format(mergetarget))
-            call(["cdo", "merge"] +
-                merged +
-                [mergetarget])
+            datasets = (xr.open_dataset(path, decode_cf=False) for path in merged)
+            mds = xr.merge((d[v] for d in datasets for v in d.data_vars))
+            mds.to_netcdf(mergetarget, format='NETCDF4')
+            mds.close()
             call(["rm", "-r"] + merged)
             compresstarget = "{}-{}.nc".format(sys.argv[2], year)
             print("Compressing to '{}'.".format(compresstarget))
