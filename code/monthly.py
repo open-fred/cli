@@ -60,7 +60,7 @@ def merge(variable, tar, store):
                         variable=fix_height.group(),
                         dimension="height",
                         position=2,
-                        value=10,
+                        value=10.0,
                         new_name=fix_height.group()[:-4])
                 call(["mv", osp.join(tmp, "fixed"), path])
         netcdfs = [osp.join(tmp, f) for f in netcdfs]
