@@ -1,3 +1,27 @@
+""" Merges netCDF files covering the same month into one file.
+
+Currently depends a lot on the input files having the right structure and
+naming, i.e. a lot of assumptions are hardwired into this script. Maybe I'll
+get to generalizing it by pulling information out of every file found, but for
+now, this will have to do.
+
+Parameters
+----------
+
+sys.argv[1]: directory
+    The script will look into every tar file in this directory, an merge and
+    netCDF file the tar file contains with the others, provided the name
+    contains the right variables and date.
+sys.argv[2]: path prefix
+    The new netCDF file containing the merged data found will be written to
+    the file "sys.argv[2]-YEAR_MONTH.nc" where YEAR_MONTH is pulled out of
+    filenames considered for the merge.
+sys.argv[3]: str, comma separated list of variables
+    The argument is split by occurrences of "," and the results have any
+    surrounding whitespace removed. The result is then treated as the list of
+    variables eligible for a merge.
+"""
+
 from glob import glob, iglob
 from itertools import chain
 from pprint import pprint as pp
