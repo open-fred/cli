@@ -35,6 +35,8 @@ import tarfile
 
 import xarray as xr
 
+from add_dimension import add_dimension
+
 
 def merge(variable, tar, store):
     with TD() as tmp:
@@ -50,10 +52,12 @@ def merge(variable, tar, store):
             fix_height = re.search("WSS_10M|WDIRlat_10M", member.name)
             if fix_height:
                 print("Fixing height.")
-                call(["python", osp.join(sys.argv[1], "add_dimension.py"),
-                    "-n", fix_height.group(), "-d", "height",
-                    "-i", "10", "-r", fix_height.group()[:-4],
-                    path, osp.join(tmp, "fixed")])
+                add_dimension(source=path, target=osp.join(tmp, "fixed"),
+                        variable=fix_height.group(),
+                        dimension="height",
+                        position=2,
+                        value=10,
+                        new_name=fix_height.group()[:-4])
                 call(["mv", osp.join(tmp, "fixed"), path])
         netcdfs = [osp.join(tmp, f) for f in netcdfs]
         print("Merging:")

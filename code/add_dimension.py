@@ -30,6 +30,28 @@ wss[10] = xr.DataArray(
 wss[ALL] = xr.merge([wss[h] for h in heights[2:]])
 """
 
+def add_dimension(source, target, variable, dimension, position, value,
+        new_name):
+    if position != 2:
+        raise NotImplementedError(
+                "Can only insert a new dimension at position 2 for now.\n"+
+                "Got: {}".format(position))
+    if new_name is None:
+        new_name = variable
+    ds = xr.open_dataset(source)
+    dimensions = list(ds[variable].dims)
+    dimensions.insert(1, dimension)
+    da = xr.DataArray(
+        name=new_name,
+        data=[[v] for v in ds[variable].values],
+        coords=OD(
+            (c, ([value] if c == dimension else ds[variable].coords[c].values))
+            for c in dimensions),
+        dims=dimensions)
+    da.attrs.update(ds.attrs)
+    da.to_netcdf(target, format='NETCDF3_64BIT', unlimited_dims=('time',))
+
+
 @click.command()
 @click.argument('source', type=click.File('rb'), default='-')
 @click.argument('target',type=click.File('wb'), default='-')
@@ -48,8 +70,7 @@ wss[ALL] = xr.merge([wss[h] for h in heights[2:]])
 @click.option('--new-name', '-r',
         help=('If supplied, VARIABLE will be renamed to the NEW-NAME in ' +
               'TARGET.'))
-def main(source, target, variable, dimension, position, value, new_name):
-#def main(**kwargs):
+def main(**kwargs):
     """ Adds a dimension to a variable in a netCDF file.
 
     Pulls VARIABLE out of SOURCE and writes it to TARGET indexed by VALUE along
@@ -58,24 +79,7 @@ def main(source, target, variable, dimension, position, value, new_name):
     Defaults to reading from STDIN and writing to STDOUT, which are specified
     with by supplying '-' as SOURCE and TARGET respectively.
     """
-    if position != 2:
-        raise NotImplementedError(
-                "Can only insert a new dimension at position 2 for now.\n"+
-                "Got: {}".format(position))
-    if new_name is None:
-        new_name = variable
-    ds = xr.open_dataset(source)
-    dimensions = list(ds[variable].dims)
-    dimensions.insert(1, dimension)
-    da = xr.DataArray(
-        name=new_name,
-        data=[[v] for v in ds[variable].values],
-        coords=OD(
-            (c, ([value] if c == dimension else ds[variable].coords[c].values))
-            for c in dimensions),
-        dims=dimensions)
-    da.attrs.upate(ds.attrs)
-    da.to_netcdf(target, format='NETCDF3_64BIT', unlimited_dims=('time',))
+    return add_dimension(**kwargs)
 
 
 if __name__ == '__main__':
