@@ -101,7 +101,7 @@ if __name__ == "__main__":
             call(["rm", "-r"] + merged)
             compresstarget = "{}-{}.nc".format(sys.argv[2], year)
             print("Compressing to '{}'.".format(compresstarget))
-            ds = xr.open_dataset(mergetarget)
+            ds = xr.open_dataset(mergetarget, decode_cf=False)
             for dv in ds.data_vars:
                 if dv[0].isupper():
                     ds.data_vars[dv].encoding['least_significant_digit'] = 3
