@@ -39,6 +39,7 @@ import re
 import sys
 import tarfile
 
+from dask.diagnostics import ProgressBar
 import xarray as xr
 
 from add_dimension import add_dimension
@@ -70,17 +71,17 @@ def merge(variable, tar, store):
         pp(netcdfs)
         target = osp.join(store, "{}.nc".format(variable))
         print("--> {}".format(target))
-        current = netcdfs[0]
-        for to_merge in netcdfs[1:]:
-            print(to_merge)
-            cds = xr.open_dataset(current, decode_cf=False)
-            tds = xr.open_dataset(to_merge, decode_cf=False)
-            mds = xr.merge((d[v] for d in [cds, tds] for v in d.data_vars))
-            mds.to_netcdf(target + ".tmp", format='NETCDF4')
-            for d in [cds, tds, mds]:
-                d.close()
-            call(["mv", target + ".tmp", target])
-            current = target
+        datasets = [
+                xr.open_dataset(n, decode_cf=False, chunks={"time": 24})
+                for n in netcdfs]
+        merged = xr.merge(d[v]
+                for d in datasets
+                for v in d.data_vars
+                if v != 'rotated_pole')
+        computation = merged.to_netcdf(target, format='NETCDF4',
+                compute=False)
+        with ProgressBar():
+            results = computation.compute()
     return target
 
 
@@ -96,31 +97,49 @@ if __name__ == "__main__":
         tars = list(tarfile.open(tar)
                 for tar in iglob(osp.join(sys.argv[1], "*.tar"))
                 if re.search(sys.argv[4], tar))
+        everything = []
         for tar in tars:
             year = re.search("(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
             merged = []
             for variable in variables:
                 merged.append(merge(variable, tar, tmp))
-            print("Merging:")
+            print("Merging/Compressing to:")
             pp(merged)
-            mergetarget = osp.join(tmp, "merged.nc")
+            mergetarget = "{}-{}.nc".format(sys.argv[2], year)
             print("--> {}".format(mergetarget))
-            datasets = (xr.open_dataset(path, decode_cf=False) for path in merged)
-            mds = xr.merge((d[v] for d in datasets for v in d.data_vars))
-            mds.to_netcdf(mergetarget, format='NETCDF4')
-            mds.close()
-            call(["rm", "-r"] + merged)
-            compresstarget = "{}-{}.nc".format(sys.argv[2], year)
-            print("Compressing to '{}'.".format(compresstarget))
-            ds = xr.open_dataset(mergetarget, decode_cf=False)
-            for dv in ds.data_vars:
+            datasets = (
+                    xr.open_dataset(path, decode_cf=False, chunks={"time": 24})
+                    for path in merged)
+            data_vars = [d[v] for d in datasets for v in d.data_vars]
+            for dv in data_vars:
                 if dv[0].isupper():
-                    ds.data_vars[dv].encoding['least_significant_digit'] = 3
-            ds.to_netcdf(compresstarget,
+                    dv.encoding['least_significant_digit'] = 3
+            ds = xr.merge(data_vars)
+            computation = ds.to_netcdf(mergetarget,
                     format='NETCDF4',
+                    compute=False,
                     encoding={
                         v: {'complevel': 9, 'zlib': True}
                         for v in list(ds.variables)})
+            with ProgressBar():
+                computation.compute()
+            call(["rm", "-r"] + merged)
             ds.close()
-            call(["rm", "-r", mergetarget])
+            everything.append(mergetarget)
+
+        print("Compressing to {}.".format(sys.argv[5]))
+        computation = (
+                xr.merge(
+                    d[v]
+                    for d in [
+                        xr.open_dataset(p, chunks={'time': 24})
+                        for p in everything]
+                    for v in d.data_vars)
+                .to_netcdf(sys.argv[5], format='NETCDF4',
+                    encoding={
+                        v: {'complevel': 9, 'zlib': True}
+                        for v in list(ds.variables)},
+                    compute=False))
+        with ProgressBar():
+            computation.compute()
 
