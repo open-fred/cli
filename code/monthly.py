@@ -127,7 +127,7 @@ if __name__ == "__main__":
                     for path in merged)
             data_vars = [d[v] for d in datasets for v in d.data_vars]
             for dv in data_vars:
-                if dv[0].isupper():
+                if dv.name[0].isupper():
                     dv.encoding['least_significant_digit'] = 3
             ds = xr.merge(data_vars)
             computation = ds.to_netcdf(mergetarget,
