@@ -45,6 +45,21 @@ import xarray as xr
 from add_dimension import add_dimension
 
 
+""" Command lines:
+
+python ../monthly.py '../' './no-height' 'ASWDIFD_S, ASWDIR_S, ASWDIR_NS2'
+python ../monthly.py '../' './' \
+                     'WSS_zlevel, T_zlevel, P_zlevel, WDIRlat_zlevel'
+
+Special: Z0 (no height but weird time bounds due to mean/instantaneous measurement)
+
+python ../../cli/code/monthly.py './' './import-test' \
+                                 'WSS_zlevel, P_zlevel' \
+                                 '2015' \
+                                 '2015.WSS.P.nc'
+
+"""
+
 def merge(variable, tar, store):
     with TD() as tmp:
         members = tar.getmembers()
