@@ -24,6 +24,8 @@ sys.argv[4]: regular expression
     A pattern to further limit the file names the script actually handles.
     Useful during development to not act on more files than absolutely
     necessary.
+sys.argv[5]: filename
+    A single file containing all merged data fill be created using this name.
 """
 
 from glob import glob, iglob
