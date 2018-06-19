@@ -49,7 +49,8 @@ def add_dimension(source, target, variable, dimension, position, value,
             for c in dimensions),
         dims=dimensions)
     da.attrs.update(ds.attrs)
-    da.to_netcdf(target, format='NETCDF3_64BIT', unlimited_dims=('time',))
+    merged = xr.merge([ds[v] for v in ds.data_vars if v != variable] + [da])
+    merged.to_netcdf(target, format='NETCDF3_64BIT', unlimited_dims=('time',))
 
 
 @click.command()
