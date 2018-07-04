@@ -164,4 +164,5 @@ if __name__ == "__main__":
             computation.compute()
         #call(["mv", tmpeverything, sys.argv[5]])
         """
+    print("All done.")
 
