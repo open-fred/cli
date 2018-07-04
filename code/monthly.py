@@ -61,6 +61,8 @@ python ../../cli/code/monthly.py './' './import-test' \
 """
 
 def merge(variable, tar, store):
+    #chunks={"time": 12, "rlat": 11, "rlon": 11}
+    chunks={}
     with TD(dir='./_T_') as tmp:
         members = tar.getmembers()
         netcdfs = []
@@ -87,7 +89,7 @@ def merge(variable, tar, store):
         target = osp.join(store, "{}.nc".format(variable))
         print("--> {}".format(target))
         datasets = [
-                xr.open_dataset(n, decode_cf=False, chunks={"time": 24})
+                xr.open_dataset(n, decode_cf=False, chunks=chunks)
                 for n in netcdfs]
         merged = xr.merge(d[v]
                 for d in datasets
@@ -108,6 +110,8 @@ if __name__ == "__main__":
     """
 
     variables = [s.strip() for s in sys.argv[3].split(",")]
+    #chunks={"time": 12, "rlat": 11, "rlon": 11}
+    chunks={}
     with TD(dir='./_T_/') as tmp:
         tars = list(tarfile.open(tar)
                 for tar in iglob(osp.join(sys.argv[1], "*.tar"))
@@ -123,7 +127,7 @@ if __name__ == "__main__":
             mergetarget = "{}-{}.nc".format(sys.argv[2], year)
             print("--> {}".format(mergetarget))
             datasets = (
-                    xr.open_dataset(path, decode_cf=False, chunks={"time": 24})
+                    xr.open_dataset(path, decode_cf=False, chunks=chunks)
                     for path in merged)
             data_vars = [d[v] for d in datasets for v in d.data_vars]
             for dv in data_vars:
@@ -147,7 +151,7 @@ if __name__ == "__main__":
                 xr.merge(
                     d[v]
                     for d in [
-                        xr.open_dataset(p, chunks={'time': 24})
+                        xr.open_dataset(p, chunks=chunks)
                         for p in everything]
                     for v in d.data_vars)
                 .to_netcdf(sys.argv[5], format='NETCDF4',
