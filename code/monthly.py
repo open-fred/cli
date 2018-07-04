@@ -146,6 +146,7 @@ if __name__ == "__main__":
             ds.close()
             everything.append(mergetarget)
 
+        """
         print("Compressing to {}.".format(sys.argv[5]))
         computation = (
                 xr.merge(
@@ -161,4 +162,6 @@ if __name__ == "__main__":
                     compute=False))
         with ProgressBar():
             computation.compute()
+        #call(["mv", tmpeverything, sys.argv[5]])
+        """
 
