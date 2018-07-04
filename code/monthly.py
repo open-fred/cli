@@ -61,7 +61,7 @@ python ../../cli/code/monthly.py './' './import-test' \
 """
 
 def merge(variable, tar, store):
-    with TD() as tmp:
+    with TD(dir='./_T_') as tmp:
         members = tar.getmembers()
         netcdfs = []
         for member in members:
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     """
 
     variables = [s.strip() for s in sys.argv[3].split(",")]
-    with TD() as tmp:
+    with TD(dir='./_T_/') as tmp:
         tars = list(tarfile.open(tar)
                 for tar in iglob(osp.join(sys.argv[1], "*.tar"))
                 if re.search(sys.argv[4], tar))
