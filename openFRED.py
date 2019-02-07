@@ -73,7 +73,6 @@ class DimensionCache:
     def __init__(self, ds, v, session, classes):
         d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
         self.session = session
-        altitude = None
         height = (
             [
                 float(ds[v])
@@ -152,10 +151,10 @@ class DimensionCache:
                 indexes[d_index[d]] for d in ("rlat", "rlon")
             ),
         )
-        self.altitudes = Keychanger(
-            data=ds.variables.get("altitude", [altitude]),
+        self.heights = Keychanger(
+            data=[height],
             transformer=lambda ixs: (
-                0 if not d_index.get("altitude") else ixs[d_index["altitude"]]
+                0 if not d_index.get("height") else ixs[d_index["height"]]
             ),
         )
 
@@ -273,7 +272,7 @@ def mapped_classes(metadata):
         )
         id = C(BI, primary_key=True)
         v = C(Float, nullable=False)
-        altitude = C(Float)
+        height = C(Float)
         timestamp_id = C(BI, FK(classes["Timestamp"].id), nullable=False)
         location_id = C(BI, FK(classes["Location"].id), nullable=False)
         variable_id = C(BI, FK(classes["Variable"].id), nullable=False)
@@ -302,8 +301,6 @@ def chunk(iterable, n):
 def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
     ds = nc.Dataset(filepath)
-    # TODO: Detect variable names with a `_XYm` suffix and rename and
-    #      set altitude apropriately.
 
     vs = (
         [v for v in variables if v in ds.variables.keys()]
@@ -348,7 +345,7 @@ def import_nc_file(filepath, variables, classes, session):
         ) as bar:
             mappings = (
                 dict(
-                    altitude=maybe(float, dcache.altitudes[indexes]),
+                    height=maybe(float, dcache.heights[indexes]),
                     v=float(ncv[indexes]),
                     timestamp_id=dcache.timestamps[indexes],
                     location_id=dcache.locations[indexes],
