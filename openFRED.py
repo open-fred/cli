@@ -305,6 +305,8 @@ def import_nc_file(filepath, variables, classes, session):
     vs = (
         [v for v in variables if v in ds.variables.keys()]
         if variables
+        # TODO?: Stop automatically detecting variables to import, since this
+        #        probably doesn't work.
         else [
             v
             for v in ds.variables.keys()
