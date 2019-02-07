@@ -74,16 +74,14 @@ class DimensionCache:
         d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
         self.session = session
         altitude = None
-        height = list(
-            filter(
-                lambda v: v.startswith("height_") and v[-1] == "m",
-                ds.variables.keys(),
-            )
-        )
-        if height:
-            # Will look like 'height_XYZm'.
-            # Cut off prefix and suffix, convert, extract, and remove.
-            altitude = int(height[0][len("height_") :][:-1])
+        height = (
+            [
+                float(ds[v])
+                for v in ds.variables.keys()
+                if v.startswith("height")
+            ]
+            + [0.]
+        )[0]
 
         click.echo("  Caching dimensions.")
         epoch = dt(2002, 2, 1, tzinfo=tz.utc)
