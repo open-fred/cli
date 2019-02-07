@@ -10,10 +10,19 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
-from sqlalchemy import (BigInteger as BI, Column as C, DateTime as DT, Float,
-                        ForeignKey as FK,
-                        Integer as Int, MetaData, String as Str, Table, Text,
-                        UniqueConstraint as UC)
+from sqlalchemy import (
+    BigInteger as BI,
+    Column as C,
+    DateTime as DT,
+    Float,
+    ForeignKey as FK,
+    Integer as Int,
+    MetaData,
+    String as Str,
+    Table,
+    Text,
+    UniqueConstraint as UC,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker
@@ -29,6 +38,7 @@ import oemof.db
 class Keychanger(MM):
     """ A mapping that applies a function to the keys before lookup.
     """
+
     def __init__(self, data, transformer):
         self.data = data
         self.transform = transformer
@@ -48,6 +58,7 @@ class Keychanger(MM):
     def __len__(self):
         return self.data.__len__()
 
+
 class DimensionCache:
     """ Caches dimension values to speed up access later on.
 
@@ -58,17 +69,21 @@ class DimensionCache:
     their primary key in the database, which is necessary for fast insertion of
     `Value`s into the database.
     """
+
     def __init__(self, ds, v, session, classes):
         d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
         self.session = session
         altitude = None
-        height = list(filter(
-            lambda v: v.startswith("height_") and v[-1] == "m",
-            ds.variables.keys()))
+        height = list(
+            filter(
+                lambda v: v.startswith("height_") and v[-1] == "m",
+                ds.variables.keys(),
+            )
+        )
         if height:
             # Will look like 'height_XYZm'.
             # Cut off prefix and suffix, convert, extract, and remove.
-            altitude = int(height[0][len('height_'):][:-1])
+            altitude = int(height[0][len("height_") :][:-1])
 
         click.echo("  Caching dimensions.")
         epoch = dt(2002, 2, 1, tzinfo=tz.utc)
@@ -77,54 +92,89 @@ class DimensionCache:
         #       Is it the previous hour or the next one and how does one figure
         #       out the resolution.
         def timestamp(index):
-            bounds = ([epoch + td(seconds=s) for s in ds['time_bnds'][index]]
-                      if (('time_bnds' in ds.dimensions.keys()) or
-                          ('time_bnds' in ds.variables.keys()))
-                      else [epoch + td(seconds=ds['time'][index])] * 2)
+            bounds = (
+                [epoch + td(seconds=s) for s in ds["time_bnds"][index]]
+                if (
+                    ("time_bnds" in ds.dimensions.keys())
+                    or ("time_bnds" in ds.variables.keys())
+                )
+                else [epoch + td(seconds=ds["time"][index])] * 2
+            )
             return {"start": bounds[0], "stop": bounds[1]}
 
-        timesteps = ds.variables.get('time', ())
+        timesteps = ds.variables.get("time", ())
         self.timestamps = Keychanger(
-            data=(list(self.cache(list(range(len(timesteps))),
-                                  "        Time:",
-                                  classes['Timestamp'],
-                                  timestamp,
-                                  idonly=True))
-                  if len(timesteps) > 1 else
-                  [None]),
-            transformer=lambda indexes: indexes[d_index['time']])
+            data=(
+                list(
+                    self.cache(
+                        list(range(len(timesteps))),
+                        "        Time:",
+                        classes["Timestamp"],
+                        timestamp,
+                        idonly=True,
+                    )
+                )
+                if len(timesteps) > 1
+                else [None]
+            ),
+            transformer=lambda indexes: indexes[d_index["time"]],
+        )
 
         def point(key):
-            wkt = WKT('POINT ({} {})'.format(ds['lon'][key], ds['lat'][key]),
-                      srid=4326)
+            wkt = WKT(
+                "POINT ({} {})".format(ds["lon"][key], ds["lat"][key]),
+                srid=4326,
+            )
             return {"point": wkt}
 
-        location_index = list(it.product(*(range(len(ds.variables.get(d, ())))
-                                           for d in ('rlat', 'rlon'))))
+        location_index = list(
+            it.product(
+                *(
+                    range(len(ds.variables.get(d, ())))
+                    for d in ("rlat", "rlon")
+                )
+            )
+        )
         self.locations = Keychanger(
-            data=dict(zip(location_index,
-                          list(self.cache(location_index, "    Location:",
-                                          classes['Location'],
-                                          point,
-                                          idonly=True)))),
-            transformer=lambda indexes: tuple(indexes[d_index[d]]
-                                              for d in ('rlat', 'rlon')))
+            data=dict(
+                zip(
+                    location_index,
+                    list(
+                        self.cache(
+                            location_index,
+                            "    Location:",
+                            classes["Location"],
+                            point,
+                            idonly=True,
+                        )
+                    ),
+                )
+            ),
+            transformer=lambda indexes: tuple(
+                indexes[d_index[d]] for d in ("rlat", "rlon")
+            ),
+        )
         self.altitudes = Keychanger(
             data=ds.variables.get("altitude", [altitude]),
-            transformer=lambda ixs: (0 if not d_index.get('altitude') else
-                                     ixs[d_index['altitude']]))
+            transformer=lambda ixs: (
+                0 if not d_index.get("altitude") else ixs[d_index["altitude"]]
+            ),
+        )
 
     def cache(self, indexes, label, cls, kwargs, idonly=False):
         with click.progressbar(indexes, label=label) as bar:
             for index in bar:
                 d = kwargs(index)
-                o = (self.session.query(cls).filter_by(**d).one_or_none() or
-                     cls(**d))
+                o = self.session.query(cls).filter_by(
+                    **d
+                ).one_or_none() or cls(**d)
                 self.session.add(o)
                 self.session.flush()
                 yield (o.id if idonly else o)
 
+
 ### Auxiliary functions needed by more than one command.
+
 
 @contextmanager
 def db_session(engine):
@@ -141,6 +191,7 @@ def db_session(engine):
     finally:
         session.close()
 
+
 def mapped_classes(metadata):
     """ Returns classes mapped to the openFRED database via SQLAlchemy.
 
@@ -155,21 +206,34 @@ def mapped_classes(metadata):
 
     def map(name, registry, namespace):
         namespace["__tablename__"] = "openfred_" + name.lower()
-        namespace["__table_args__"] = (namespace.get("__table_args__", ()) +
-                                       ({"keep_existing": True},))
-        if namespace["__tablename__"][-1] != 's':
-            namespace["__tablename__"] += 's'
+        namespace["__table_args__"] = namespace.get("__table_args__", ()) + (
+            {"keep_existing": True},
+        )
+        if namespace["__tablename__"][-1] != "s":
+            namespace["__tablename__"] += "s"
         registry[name] = type(name, (registry["__Base__"],), namespace)
 
-    map("Timestamp", classes, {
-        "id": C(BI, primary_key=True),
-        "start": C(DT),
-        "stop": C(DT),
-        "__table_args__": (UC("start", "stop"),)})
-    map("Location", classes, {
-        "id": C(BI, primary_key=True),
-        "point": C(geotypes.Geometry(geometry_type='POINT', srid=4326),
-                   unique=True)})
+    map(
+        "Timestamp",
+        classes,
+        {
+            "id": C(BI, primary_key=True),
+            "start": C(DT),
+            "stop": C(DT),
+            "__table_args__": (UC("start", "stop"),),
+        },
+    )
+    map(
+        "Location",
+        classes,
+        {
+            "id": C(BI, primary_key=True),
+            "point": C(
+                geotypes.Geometry(geometry_type="POINT", srid=4326),
+                unique=True,
+            ),
+        },
+    )
     # TODO: Handle units.
     class Variable(Base):
         __table_args__ = ({"keep_existing": True},)
@@ -181,8 +245,11 @@ def mapped_classes(metadata):
         aggregation = C(Str(255))
         description = C(Text)
         standard_name = C(Str(255))
-        __mapper_args_ = {"polymorphic_identity": "variable",
-                          "polymorphic_on": type}
+        __mapper_args_ = {
+            "polymorphic_identity": "variable",
+            "polymorphic_on": type,
+        }
+
     classes["Variable"] = Variable
 
     class Flags(Variable):
@@ -192,66 +259,83 @@ def mapped_classes(metadata):
         flag_ks = C(ARRAY(Int), nullable=False)
         flag_vs = C(ARRAY(Str(37)), nullable=False)
         __mapper_args_ = {"polymorphic_identity": "flags"}
+
         @property
         def flag(self, key):
             flags = dict(zip(self.flag_ks, self.flag_vs))
             return flags[key]
+
     classes["Flags"] = Flags
 
     class Value(Base):
         __tablename__ = "openfred_values"
-        __table_args__ = (UC("timestamp_id", "location_id", "variable_id"),
-                          {"keep_existing": True})
+        __table_args__ = (
+            UC("timestamp_id", "location_id", "variable_id"),
+            {"keep_existing": True},
+        )
         id = C(BI, primary_key=True)
         v = C(Float, nullable=False)
         altitude = C(Float)
         timestamp_id = C(BI, FK(classes["Timestamp"].id), nullable=False)
         location_id = C(BI, FK(classes["Location"].id), nullable=False)
         variable_id = C(BI, FK(classes["Variable"].id), nullable=False)
-        timestamp = relationship(classes["Timestamp"], backref='values')
-        location = relationship(classes["Location"], backref='values')
-        variable = relationship(classes["Variable"], backref='values')
+        timestamp = relationship(classes["Timestamp"], backref="values")
+        location = relationship(classes["Location"], backref="values")
+        variable = relationship(classes["Variable"], backref="values")
+
     classes["Value"] = Value
 
     return classes
 
+
 # TODO: The two functions below are prime examples of stuff that one can and
 #       should write tests for.
 def maybe(f, o):
-    return (None if o is None else f(o))
+    return None if o is None else f(o)
+
 
 def chunk(iterable, n):
     """ Divide `iterable` into chunks of size `n` without padding.
     """
     xs = iter(iterable)
-    return (it.chain((x,), it.islice(xs, n-1)) for x in xs)
+    return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
+
 
 def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
     ds = nc.Dataset(filepath)
-    #TODO: Detect variable names with a `_XYm` suffix and rename and
+    # TODO: Detect variable names with a `_XYm` suffix and rename and
     #      set altitude apropriately.
 
-    vs = ([v for v in variables if v in ds.variables.keys()]
-          if variables
-          else [v for v in ds.variables.keys()
-                  if hasattr(ds.variables[v], 'coordinates')])
+    vs = (
+        [v for v in variables if v in ds.variables.keys()]
+        if variables
+        else [
+            v
+            for v in ds.variables.keys()
+            if hasattr(ds.variables[v], "coordinates")
+        ]
+    )
 
     for name in vs:
         ncv = ds[name]
         if hasattr(ncv, "flag_values"):
-            variable = classes['Flags']
-            kws = {"flag_ks": [int(v) for v in ncv.flag_values],
-                   "flag_vs": ncv.flag_meanings}
+            variable = classes["Flags"]
+            kws = {
+                "flag_ks": [int(v) for v in ncv.flag_values],
+                "flag_vs": ncv.flag_meanings,
+            }
         else:
-            variable = classes['Variable']
+            variable = classes["Variable"]
             kws = {}
-        dbv = session.query(variable).filter_by(name=name)\
-              .one_or_none() or \
-              variable(name=name, standard_name=getattr(ncv, "standard_name",
-                                                        None),
-                       description=ncv.long_name,
-                       **kws)
+        dbv = session.query(variable).filter_by(
+            name=name
+        ).one_or_none() or variable(
+            name=name,
+            standard_name=getattr(ncv, "standard_name", None),
+            description=ncv.long_name,
+            **kws
+        )
         session.add(dbv)
         session.commit()
         dbvid = dbv.id
@@ -261,17 +345,21 @@ def import_nc_file(filepath, variables, classes, session):
         click.echo("  Importing variable(s).")
         length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
         tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
-        with click.progressbar(length=length,
-                               label="{: >{}}:".format(
-                                   name, 4+len("location"))) as bar:
-            mappings = (dict(altitude=maybe(float, dcache.altitudes[indexes]),
-                             v=float(ncv[indexes]),
-                             timestamp_id=dcache.timestamps[indexes],
-                             location_id=dcache.locations[indexes],
-                             variable_id=dbvid)
-                        for indexes in tuples
-                        if ncv[indexes] is not masked)
-            mapper = classes['Value']
+        with click.progressbar(
+            length=length, label="{: >{}}:".format(name, 4 + len("location"))
+        ) as bar:
+            mappings = (
+                dict(
+                    altitude=maybe(float, dcache.altitudes[indexes]),
+                    v=float(ncv[indexes]),
+                    timestamp_id=dcache.timestamps[indexes],
+                    location_id=dcache.locations[indexes],
+                    variable_id=dbvid,
+                )
+                for indexes in tuples
+                if ncv[indexes] is not masked
+            )
+            mapper = classes["Value"]
             for c in chunk(mappings, 1000):
                 l = list(c)
                 session.bulk_insert_mappings(mapper, l)
@@ -289,26 +377,43 @@ def openFRED(context):
     """
     context.obj = {}
 
+
 @click.group()
 @click.pass_context
-@click.option('--configuration-file', '-c', type=click.Path(exists=True),
-              help=('Specifies an alternative configuration file ' +
-                    'used by `oemof.db`.'))
-@click.option('--section', '-s', default='openFRED', show_default=True,
-              help=("The section in `oemof.db`'s configuration file from " +
-                    "which database parameters should be read."))
+@click.option(
+    "--configuration-file",
+    "-c",
+    type=click.Path(exists=True),
+    help=(
+        "Specifies an alternative configuration file " + "used by `oemof.db`."
+    ),
+)
+@click.option(
+    "--section",
+    "-s",
+    default="openFRED",
+    show_default=True,
+    help=(
+        "The section in `oemof.db`'s configuration file from "
+        + "which database parameters should be read."
+    ),
+)
 def db(context, configuration_file, section):
     """ Commands to work with openFRED databases.
     """
     if configuration_file is not None:
         oemof.db.load_config(configuration_file)
-    context.obj['db'] = {'cfg': configuration_file, 'section': section}
+    context.obj["db"] = {"cfg": configuration_file, "section": section}
+
 
 @db.command()
 @click.pass_context
-@click.option("--drop", "-d", type=click.Choice(["schema", "tables"]),
-              help=("Drop the schema/tables prior to initializing the " +
-                    "database."))
+@click.option(
+    "--drop",
+    "-d",
+    type=click.Choice(["schema", "tables"]),
+    help=("Drop the schema/tables prior to initializing the " + "database."),
+)
 def setup(context, drop):
     """ Initialize a database for openFRED data.
 
@@ -318,8 +423,8 @@ def setup(context, drop):
     exists. The same holds for the tables necessary to store openFRED data
     inside the schema.
     """
-    section = context.obj['db']['section']
-    schema = oemof.db.config.get(section, 'schema')
+    section = context.obj["db"]["section"]
+    schema = oemof.db.config.get(section, "schema")
     engine = oemof.db.engine(section)
     inspector = inspect(engine)
     metadata = MetaData(schema=schema, bind=engine, reflect=(not drop))
@@ -328,44 +433,55 @@ def setup(context, drop):
     if drop == "schema":
         with engine.connect() as connection:
             connection.execute(
-                "DROP SCHEMA IF EXISTS {} CASCADE".format(schema))
+                "DROP SCHEMA IF EXISTS {} CASCADE".format(schema)
+            )
     elif drop == "tables":
-        classes['__Base__'].metadata.drop_all(engine)
+        classes["__Base__"].metadata.drop_all(engine)
     if not schema in inspector.get_schema_names():
         engine.execute(CreateSchema(schema))
 
     with engine.connect() as connection:
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
         connection.execute("CREATE EXTENSION IF NOT EXISTS postgis_topology;")
-    classes['__Base__'].metadata.create_all(engine)
+    classes["__Base__"].metadata.create_all(engine)
 
     with db_session(engine) as session:
-        timestamps = classes['Timestamp']
+        timestamps = classes["Timestamp"]
         try:
-            ts = session.query(timestamps)\
-                        .filter_by(start=None, stop=None)\
-                        .one_or_none()
+            ts = (
+                session.query(timestamps)
+                .filter_by(start=None, stop=None)
+                .one_or_none()
+            )
         except MRF as e:
-            click.echo("Multiple timestamps found which have no `start` " +
-                       "and/or `stop` values.\nAborting.")
-        ts = ts or classes['Timestamp']()
+            click.echo(
+                "Multiple timestamps found which have no `start` "
+                "and/or `stop` values.\nAborting."
+            )
+        ts = ts or classes["Timestamp"]()
         session.add(ts)
         session.flush()
 
         context = MigrationContext.configure(session.connection())
         ops = Operations(context)
-        ops.alter_column(table_name=str(classes["Value"].__table__.name),
-                         column_name="timestamp_id",
-                         server_default=str(ts.id),
-                         schema=schema)
+        ops.alter_column(
+            table_name=str(classes["Value"].__table__.name),
+            column_name="timestamp_id",
+            server_default=str(ts.id),
+            schema=schema,
+        )
 
         constraint_name = "singular_null_timestamp_constraint"
-        if not [c for c in timestamps.__table__.constraints
-                  if c.name == constraint_name]:
+        if not [
+            c
+            for c in timestamps.__table__.constraints
+            if c.name == constraint_name
+        ]:
             constraint = CheckConstraint(
-                "(id = {}) OR ".format(ts.id) +
-                "(start IS NOT NULL AND stop IS NOT NULL)",
-                name=constraint_name)
+                "(id = {}) OR ".format(ts.id)
+                + "(start IS NOT NULL AND stop IS NOT NULL)",
+                name=constraint_name,
+            )
             timestamps.__table__.append_constraint(constraint)
             session.execute(AddConstraint(constraint))
 
@@ -374,13 +490,21 @@ def setup(context, drop):
 
 @db.command("import")
 @click.pass_context
-@click.argument('paths', type=click.Path(exists=True), metavar='PATHS',
-                nargs=-1)
-@click.option('--variables', '-V', metavar='VARIABLES', multiple=True,
-              help=('Specify the variable to import. Can be specified ' +
-                    'multiple times. If not specified, a custom ' +
-                    '(as of now wonky, hacky and probably buggy) ' +
-                    'detection scheme ist used.'))
+@click.argument(
+    "paths", type=click.Path(exists=True), metavar="PATHS", nargs=-1
+)
+@click.option(
+    "--variables",
+    "-V",
+    metavar="VARIABLES",
+    multiple=True,
+    help=(
+        "Specify the variable to import. Can be specified "
+        "multiple times. If not specified, a custom "
+        "(as of now wonky, hacky and probably buggy) "
+        "detection scheme ist used."
+    ),
+)
 def import_(context, paths, variables):
     """ Import an openFRED dataset.
 
@@ -396,11 +520,11 @@ def import_(context, paths, variables):
         elif os.path.isdir(p):
             for (path, _, files) in os.walk(p):
                 for f in files:
-                    if f[-3:] == '.nc':
+                    if f[-3:] == ".nc":
                         filepaths.append(os.path.join(path, f))
 
-    section = context.obj['db']['section']
-    schema = oemof.db.config.get(section, 'schema')
+    section = context.obj["db"]["section"]
+    schema = oemof.db.config.get(section, "schema")
     engine = oemof.db.engine(section)
 
     classes = mapped_classes(MetaData(schema=schema))
@@ -411,7 +535,7 @@ def import_(context, paths, variables):
         click.echo("  Committing.")
         session.commit()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     openFRED.add_command(db)
     openFRED()
-
