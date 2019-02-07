@@ -215,8 +215,8 @@ def mapped_classes(metadata):
 
     return classes
 
-# TODO: The two functions below are prime examples of stuff that can one should
-#       write tests for.
+# TODO: The two functions below are prime examples of stuff that one can and
+#       should write tests for.
 def maybe(f, o):
     return (None if o is None else f(o))
 
