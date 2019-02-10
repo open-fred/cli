@@ -10,6 +10,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
+from pandas import to_datetime
 from sqlalchemy import (
     BigInteger as BI,
     Column as C,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Float,
     ForeignKey as FK,
     Integer as Int,
+    Interval,
     MetaData,
     String as Str,
     Table,
@@ -84,26 +86,38 @@ class DimensionCache:
 
         click.echo("  Caching dimensions.")
 
-        def timestamp(index):
-            bounds = ds["time_bnds"][index]
-            return {"start": bounds[0], "stop": bounds[1]}
+        def timespan(index):
+            bounds = [
+                [to_datetime(bnd) for bnd in bnds]
+                for bnds in ds["time_bnds"][index].values
+            ]
+            intervals = [t[1] - t[0] for t in bounds]
+            assert (
+                len(set(intervals)) == 1
+            ), "Nonuniform timeseries resolutions are not supported yet."
+            return {
+                "start": bounds[0][0],
+                "stop": bounds[-1][1],
+                "resolution": intervals[0],
+                "segments": bounds,
+            }
 
-        timesteps = ds.variables.get("time", ())
-        self.timestamps = Keychanger(
+        self.timespans = Keychanger(
             data=(
                 list(
                     self.cache(
-                        list(range(len(timesteps))),
+                        [slice(None)],
                         "        Time:",
-                        classes["Timestamp"],
-                        timestamp,
+                        classes["Timespan"],
+                        timespan,
                         idonly=True,
+                        exclude={"segments"},
                     )
                 )
-                if len(timesteps) > 1
+                if "time" in ds.variables
                 else [None]
             ),
-            transformer=lambda indexes: indexes[d_index["time"]],
+            transformer=lambda indexes: 0,
         )
 
         def point(key):
@@ -147,12 +161,12 @@ class DimensionCache:
             ),
         )
 
-    def cache(self, indexes, label, cls, kwargs, idonly=False):
+    def cache(self, indexes, label, cls, kwargs, idonly=False, exclude=set()):
         with click.progressbar(indexes, label=label) as bar:
             for index in bar:
                 d = kwargs(index)
                 o = self.session.query(cls).filter_by(
-                    **d
+                    **{k: d[k] for k in d if k not in exclude}
                 ).one_or_none() or cls(**d)
                 self.session.add(o)
                 self.session.flush()
@@ -200,13 +214,15 @@ def mapped_classes(metadata):
         registry[name] = type(name, (registry["__Base__"],), namespace)
 
     map(
-        "Timestamp",
+        "Timespan",
         classes,
         {
             "id": C(BI, primary_key=True),
             "start": C(DT),
             "stop": C(DT),
-            "__table_args__": (UC("start", "stop"),),
+            "resolution": C(Interval),
+            "segments": C(ARRAY(DT, dimensions=2)),
+            "__table_args__": (UC("start", "stop", "resolution"),),
         },
     )
     map(
@@ -253,23 +269,23 @@ def mapped_classes(metadata):
 
     classes["Flags"] = Flags
 
-    class Value(Base):
-        __tablename__ = "openfred_values"
+    class Series(Base):
+        __tablename__ = "openfred_series"
         __table_args__ = (
-            UC("timestamp_id", "location_id", "variable_id"),
+            UC("timespan_id", "location_id", "variable_id"),
             {"keep_existing": True},
         )
         id = C(BI, primary_key=True)
-        v = C(Float, nullable=False)
+        values = C(ARRAY(Float), nullable=False)
         height = C(Float)
-        timestamp_id = C(BI, FK(classes["Timestamp"].id), nullable=False)
+        timespan_id = C(BI, FK(classes["Timespan"].id), nullable=False)
         location_id = C(BI, FK(classes["Location"].id), nullable=False)
         variable_id = C(BI, FK(classes["Variable"].id), nullable=False)
-        timestamp = relationship(classes["Timestamp"], backref="values")
-        location = relationship(classes["Location"], backref="values")
-        variable = relationship(classes["Variable"], backref="values")
+        timespan = relationship(classes["Timespan"], backref="series")
+        location = relationship(classes["Location"], backref="series")
+        variable = relationship(classes["Variable"], backref="series")
 
-    classes["Value"] = Value
+    classes["Series"] = Series
 
     return classes
 
@@ -333,24 +349,30 @@ def import_nc_file(filepath, variables, classes, session):
         dcache = DimensionCache(ds, name, session, classes)
         session.commit()
         click.echo("  Importing variable(s).")
-        length = reduce(multiply, (ds[d].size for d in ncv.dims))
-        tuples = it.product(*(range(ds[d].size) for d in ncv.dims))
+        length = reduce(
+            multiply, (ds[d].size for d in ncv.dims if d != "time")
+        )
+        tuples = it.product(
+            *(
+                range(ds[d].size) if d != "time" else [slice(None)]
+                for d in ncv.dims
+            )
+        )
         with click.progressbar(
             length=length, label="{: >{}}:".format(name, 4 + len("location"))
         ) as bar:
             mappings = (
                 dict(
                     height=maybe(float, dcache.heights[indexes]),
-                    v=float(ncv[indexes]),
-                    timestamp_id=dcache.timestamps[indexes],
+                    values=(round(float(v), 3) for v in ncv.values[indexes]),
+                    timespan_id=dcache.timespans[indexes],
                     location_id=dcache.locations[indexes],
                     variable_id=dbvid,
                 )
                 for indexes in tuples
-                if ncv[indexes] is not masked
             )
-            mapper = classes["Value"]
-            for c in chunk(mappings, 1000):
+            mapper = classes["Series"]
+            for c in chunk(mappings, 1):
                 l = list(c)
                 session.bulk_insert_mappings(mapper, l)
                 bar.update(len(l))
@@ -436,10 +458,10 @@ def setup(context, drop):
     classes["__Base__"].metadata.create_all(engine)
 
     with db_session(engine) as session:
-        timestamps = classes["Timestamp"]
+        timespan = classes["Timespan"]
         try:
             ts = (
-                session.query(timestamps)
+                session.query(timespan)
                 .filter_by(start=None, stop=None)
                 .one_or_none()
             )
@@ -448,15 +470,15 @@ def setup(context, drop):
                 "Multiple timestamps found which have no `start` "
                 "and/or `stop` values.\nAborting."
             )
-        ts = ts or classes["Timestamp"]()
+        ts = ts or classes["Timespan"]()
         session.add(ts)
         session.flush()
 
         context = MigrationContext.configure(session.connection())
         ops = Operations(context)
         ops.alter_column(
-            table_name=str(classes["Value"].__table__.name),
-            column_name="timestamp_id",
+            table_name=str(classes["Series"].__table__.name),
+            column_name="timespan_id",
             server_default=str(ts.id),
             schema=schema,
         )
@@ -464,7 +486,7 @@ def setup(context, drop):
         constraint_name = "singular_null_timestamp_constraint"
         if not [
             c
-            for c in timestamps.__table__.constraints
+            for c in timespan.__table__.constraints
             if c.name == constraint_name
         ]:
             constraint = CheckConstraint(
@@ -472,7 +494,7 @@ def setup(context, drop):
                 + "(start IS NOT NULL AND stop IS NOT NULL)",
                 name=constraint_name,
             )
-            timestamps.__table__.append_constraint(constraint)
+            timespan.__table__.append_constraint(constraint)
             session.execute(AddConstraint(constraint))
 
     return classes
