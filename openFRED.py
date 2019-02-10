@@ -30,7 +30,7 @@ from sqlalchemy.orm.exc import MultipleResultsFound as MRF
 from sqlalchemy.inspection import inspect
 from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
 import click
-import netCDF4 as nc
+import xarray as xr
 
 import oemof.db
 
@@ -71,7 +71,7 @@ class DimensionCache:
     """
 
     def __init__(self, ds, v, session, classes):
-        d_index = {d: i for i, d in enumerate(ds[v].dimensions)}
+        d_index = {d: i for i, d in enumerate(ds[v].dims)}
         self.session = session
         height = (
             [
@@ -83,20 +83,9 @@ class DimensionCache:
         )[0]
 
         click.echo("  Caching dimensions.")
-        epoch = dt(2002, 2, 1, tzinfo=tz.utc)
 
-        # TODO: Ask Ronny about the meaning of timestamps without bounds.
-        #       Is it the previous hour or the next one and how does one figure
-        #       out the resolution.
         def timestamp(index):
-            bounds = (
-                [epoch + td(seconds=s) for s in ds["time_bnds"][index]]
-                if (
-                    ("time_bnds" in ds.dimensions.keys())
-                    or ("time_bnds" in ds.variables.keys())
-                )
-                else [epoch + td(seconds=ds["time"][index])] * 2
-            )
+            bounds = ds["time_bnds"][index]
             return {"start": bounds[0], "stop": bounds[1]}
 
         timesteps = ds.variables.get("time", ())
@@ -300,7 +289,11 @@ def chunk(iterable, n):
 
 def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
-    ds = nc.Dataset(filepath)
+
+    ds = xr.open_dataset(filepath, decode_cf=False)
+    if "time" in ds.variables and not "units" in ds["time_bnds"].attrs:
+        ds["time_bnds"].attrs["units"] = ds["time"].units
+    ds = xr.decode_cf(ds)
 
     vs = (
         [v for v in variables if v in ds.variables.keys()]
@@ -340,8 +333,8 @@ def import_nc_file(filepath, variables, classes, session):
         dcache = DimensionCache(ds, name, session, classes)
         session.commit()
         click.echo("  Importing variable(s).")
-        length = reduce(multiply, (ds[d].size for d in ncv.dimensions))
-        tuples = it.product(*(range(ds[d].size) for d in ncv.dimensions))
+        length = reduce(multiply, (ds[d].size for d in ncv.dims))
+        tuples = it.product(*(range(ds[d].size) for d in ncv.dims))
         with click.progressbar(
             length=length, label="{: >{}}:".format(name, 4 + len("location"))
         ) as bar:
