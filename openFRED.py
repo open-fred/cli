@@ -122,7 +122,9 @@ class DimensionCache:
 
         def point(key):
             wkt = WKT(
-                "POINT ({} {})".format(ds["lon"][key], ds["lat"][key]),
+                "POINT ({} {})".format(
+                    ds["lon"].values[key], ds["lat"].values[key]
+                ),
                 srid=4326,
             )
             return {"point": wkt}
