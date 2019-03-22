@@ -81,7 +81,7 @@ class DimensionCache:
                 for v in ds.variables.keys()
                 if v.startswith("height")
             ]
-            + [0.]
+            + [0.0]
         )[0]
 
         click.echo("  Caching dimensions.")
