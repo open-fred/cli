@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey as FK,
     Integer as Int,
     Interval,
+    JSON,
     MetaData,
     String as Str,
     Table,
@@ -246,7 +247,7 @@ def mapped_classes(metadata):
         name = C(Str(255), nullable=False, unique=True)
         # TODO: Figure out whether and where this is in the '.nc' files.
         type = C(Str(37))
-        aggregation = C(Str(255))
+        netcdf_attributes = C(JSON)
         description = C(Text)
         standard_name = C(Str(255))
         __mapper_args_ = {
@@ -342,6 +343,7 @@ def import_nc_file(filepath, variables, classes, session):
             name=name,
             standard_name=getattr(ncv, "standard_name", None),
             description=ncv.long_name,
+            netcdf_attributes=ncv.attrs,
             **kws
         )
         session.add(dbv)
