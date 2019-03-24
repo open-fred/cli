@@ -6,4 +6,7 @@ click
 netCDF4
 oemof
 -e git+https://github.com/oemof/oemof.db.git@dev#egg=oemof.db
+xarray >= 10.6
+dask
+toolz
 
