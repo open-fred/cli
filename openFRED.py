@@ -1,3 +1,33 @@
+# TODO: Handle Timestamps and Metadata correctly.
+#   * "instantaneous"
+#     - measurements should have zero length timestamps
+#     - don't seem to have a "cell_methods" attribue
+#     - are those variables where "time_bnds" doesn't have a "units" attribute?
+#   * "non-instantaneous" (max, mean, sum)
+#     - have a "cell_method" attribute of the form "time: METHOD"
+#       (make sure "time" is the only key in there)
+#   * values that are constant wrt. "time"
+#     - have a "units" attribute on "time_bnds"
+#     - don't have a "cell_method" attribute
+#     - still have a "time" coordinate, but it has `len` 1
+#   * Names:
+#     - "standard_name" is not allowed to contain whitespace
+#     - not all variables have a "standard_name"
+#   * Units: uses terms from the UDUNITS package
+#     - has a Python binding?
+#     - has what relation to GNU Units?
+
+# TODO: Parallelize importing variables.
+#       This shouldn't be too hard. While the session is currently created only
+#       once and passed around a bunch of times, it doesn't have to be
+#       that way. The session is only used when importing a specific
+#       variable anyway, so one could simply factor out session creation
+#       into a function and call that in the process importing each
+#       variable. Also, this would force factoring the code importing a
+#       single variable out of the function importing a single file,
+#       which would finally lead to code being a bit less monolithic
+#       again.
+
 from contextlib import contextmanager
 from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
@@ -337,6 +367,8 @@ def import_nc_file(filepath, variables, classes, session):
         else:
             variable = classes["Variable"]
             kws = {}
+        # TODO: Assert that stuff in the file matches what's already there, if
+        #       the variable already exists in the database.
         dbv = session.query(variable).filter_by(
             name=name
         ).one_or_none() or variable(
