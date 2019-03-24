@@ -35,6 +35,7 @@ from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
 from pandas import to_datetime
 from sqlalchemy import (
+    create_engine,
     BigInteger as BI,
     Column as C,
     DateTime as DT,
@@ -599,11 +600,11 @@ def import_(context, paths, variables):
 
     section = context.obj["db"]["section"]
     schema = oemof.db.config.get(section, "schema")
-    engine = oemof.db.engine(section)
+    url = oemof.db.url(section)
 
     classes = mapped_classes(MetaData(schema=schema))
 
-    with db_session(engine) as session:
+    with db_session(create_engine(url)) as session:
         for f in sorted(filepaths):
             import_nc_file(f, variables, classes, session)
         click.echo("  Committing.")
