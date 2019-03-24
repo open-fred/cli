@@ -315,7 +315,7 @@ def mapped_classes(metadata):
     class Series(Base):
         __tablename__ = "openfred_series"
         __table_args__ = (
-            UC("timespan_id", "location_id", "variable_id"),
+            UC("height", "location_id", "timespan_id", "variable_id"),
             {"keep_existing": True},
         )
         id = C(BI, primary_key=True)
