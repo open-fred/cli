@@ -355,17 +355,7 @@ def import_nc_file(filepath, variables, classes, session):
         time = "time_bnds" if "units" in ds["time_bnds"].attrs else "time"
     ds = xr.decode_cf(ds)
 
-    vs = (
-        [v for v in variables if v in ds.variables.keys()]
-        if variables
-        # TODO?: Stop automatically detecting variables to import, since this
-        #        probably doesn't work.
-        else [
-            v
-            for v in ds.variables.keys()
-            if hasattr(ds.variables[v], "coordinates")
-        ]
-    )
+    vs = [v for v in variables if v in ds.variables.keys()]
 
     for name in vs:
         ncv = ds[name]
@@ -586,9 +576,7 @@ def setup(context, drop):
     multiple=True,
     help=(
         "Specify the variable to import. Can be specified "
-        "multiple times. If not specified, a custom "
-        "(as of now wonky, hacky and probably buggy) "
-        "detection scheme ist used."
+        "multiple times. If not specified, nothing is imported."
     ),
 )
 def import_(context, paths, variables):
