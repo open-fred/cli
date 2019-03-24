@@ -1,11 +1,4 @@
 # TODO: Handle Timestamps and Metadata correctly.
-#   * "instantaneous"
-#     - measurements should have zero length timestamps
-#     - don't seem to have a "cell_methods" attribue
-#     - are those variables where "time_bnds" doesn't have a "units" attribute?
-#   * "non-instantaneous" (max, mean, sum)
-#     - have a "cell_method" attribute of the form "time: METHOD"
-#       (make sure "time" is the only key in there)
 #   * values that are constant wrt. "time"
 #     - have a "units" attribute on "time_bnds"
 #     - don't have a "cell_method" attribute
@@ -103,7 +96,7 @@ class DimensionCache:
     `Value`s into the database.
     """
 
-    def __init__(self, ds, v, session, classes):
+    def __init__(self, ds, v, session, classes, time):
         d_index = {d: i for i, d in enumerate(ds[v].dims)}
         self.session = session
         height = (
@@ -118,10 +111,27 @@ class DimensionCache:
         click.echo("  Caching dimensions.")
 
         def timespan(index):
-            bounds = [
-                [to_datetime(bnd) for bnd in bnds]
-                for bnds in ds["time_bnds"][index].values
-            ]
+            assert time is not None, (
+                "Trying to get timespan intervalls for a variable which seems"
+                "\nconstant wrt. to time."
+            )
+            assert time in ["time_bnds", "time"], (
+                "Trying to get timespan intevalls using an invalid argument"
+                "value for `time`\n."
+                'Valid argument values are `"time"` and `"time_bnds"`.\n\n'
+                "  Got: {}"
+            ).format("`None`" if time is None else time)
+            bounds = (
+                [
+                    [to_datetime(bnd) for bnd in bnds]
+                    for bnds in ds["time_bnds"][index].values
+                ]
+                if time == "time_bnds"
+                else [
+                    [to_datetime(moment)] * 2
+                    for moment in ds["time"][index].values
+                ]
+            )
             intervals = [t[1] - t[0] for t in bounds]
             assert (
                 len(set(intervals)) == 1
@@ -340,8 +350,9 @@ def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
 
     ds = xr.open_dataset(filepath, decode_cf=False)
-    if "time" in ds.variables and not "units" in ds["time_bnds"].attrs:
-        ds["time_bnds"].attrs["units"] = ds["time"].units
+    time = None
+    if "time" in ds.variables:
+        time = "time_bnds" if "units" in ds["time_bnds"].attrs else "time"
     ds = xr.decode_cf(ds)
 
     vs = (
@@ -367,6 +378,33 @@ def import_nc_file(filepath, variables, classes, session):
         else:
             variable = classes["Variable"]
             kws = {}
+        if not time:
+            assert not "time" in ncv.coords or (
+                len(ds["time"]) == 1
+                and not "time:" in ncv.attrs.get("cell_methods", "")
+            ), (
+                "Looks like we found a variable which is neither "
+                "instantaneous nor "
+                "constant wrt. time but also either doesn't have a "
+                "`cell_methods` attribute\n"
+                "or it has one that doesn't have `time` entry.\n\n"
+                "  variable name: {}\n"
+                "  cell_methods : {}"
+            ).format(
+                ncv.name,
+                "`None`"
+                if ncv.attrs.get("cell_methods") is None
+                else ncv.attrs.get("cell_methods"),
+            )
+        if time == "time":
+            assert not "time:" in ncv.attrs.get("cell_methods", ""), (
+                "Looks like we found a variable which is instantaneous or "
+                "constant wrt. time\n"
+                "but also has a `cell_methods` attribute with a `time` entry.\n"
+                "These things aren't compatible.\n\n"
+                "  variable name: {}\n"
+                "  cell_methods : {}"
+            ).format(ncv.name, ncv.attrs.get("cell_methods"))
         # TODO: Assert that stuff in the file matches what's already there, if
         #       the variable already exists in the database.
         dbv = session.query(variable).filter_by(
@@ -382,7 +420,7 @@ def import_nc_file(filepath, variables, classes, session):
         session.commit()
         dbvid = dbv.id
         session.expunge(dbv)
-        dcache = DimensionCache(ds, name, session, classes)
+        dcache = DimensionCache(ds, name, session, classes, time)
         session.commit()
         click.echo("  Importing variable(s).")
         length = reduce(
