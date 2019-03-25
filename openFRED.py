@@ -1,8 +1,4 @@
 # TODO: Handle Timestamps and Metadata correctly.
-#   * values that are constant wrt. "time"
-#     - have a "units" attribute on "time_bnds"
-#     - don't have a "cell_method" attribute
-#     - still have a "time" coordinate, but it has `len` 1
 #   * Names:
 #     - "standard_name" is not allowed to contain whitespace
 #     - not all variables have a "standard_name"
@@ -351,15 +347,21 @@ def import_nc_file(filepath, variables, classes, session):
     click.echo("Importing: {}".format(filepath))
 
     ds = xr.open_dataset(filepath, decode_cf=False)
-    time = None
-    if "time" in ds.variables:
-        time = "time_bnds" if "units" in ds["time_bnds"].attrs else "time"
+    time = (
+        ds["time"].attrs["bounds"]
+        if "time" in ds.coords
+        and "units" in ds[ds["time"].attrs["bounds"]].attrs
+        else "time"
+    )
+
     ds = xr.decode_cf(ds)
 
     vs = [v for v in variables if v in ds.variables.keys()]
 
     for name in vs:
         ncv = ds[name]
+        if time != "time" and not "time:" in ncv.attrs.get("cell_methods", ""):
+            time = None
         if hasattr(ncv, "flag_values"):
             variable = classes["Flags"]
             kws = {
