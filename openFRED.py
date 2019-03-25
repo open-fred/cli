@@ -393,8 +393,8 @@ def import_nc_file(filepath, variables, classes, session):
             assert not "time:" in ncv.attrs.get("cell_methods", ""), (
                 "Looks like we found a variable which is instantaneous or "
                 "constant wrt. time\n"
-                "but also has a `cell_methods` attribute with a `time` entry.\n"
-                "These things aren't compatible.\n\n"
+                "but also has a `cell_methods` attribute with a `time` entry."
+                "\nThese things aren't compatible.\n\n"
                 "  variable name: {}\n"
                 "  cell_methods : {}"
             ).format(ncv.name, ncv.attrs.get("cell_methods"))
