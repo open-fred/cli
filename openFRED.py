@@ -359,6 +359,10 @@ def import_nc_file(filepath, variables, classes, session):
     vs = [v for v in variables if v in ds.variables.keys()]
 
     for name in vs:
+        import_variable(name, ds, time, classes, session)
+
+
+def import_variable(name, dataset, time, classes, session):
         ncv = ds[name]
         if time != "time" and not "time:" in ncv.attrs.get("cell_methods", ""):
             time = None
