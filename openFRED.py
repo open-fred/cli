@@ -471,7 +471,7 @@ def openFRED(context):
     "-c",
     type=click.Path(exists=True),
     help=(
-        "Specifies an alternative configuration file " + "used by `oemof.db`."
+        "Specifies an alternative configuration file used by `oemof.db`."
     ),
 )
 @click.option(
@@ -481,7 +481,7 @@ def openFRED(context):
     show_default=True,
     help=(
         "The section in `oemof.db`'s configuration file from "
-        + "which database parameters should be read."
+        "which database parameters should be read."
     ),
 )
 def db(context, configuration_file, section):
@@ -498,7 +498,7 @@ def db(context, configuration_file, section):
     "--drop",
     "-d",
     type=click.Choice(["schema", "tables"]),
-    help=("Drop the schema/tables prior to initializing the " + "database."),
+    help=("Drop the schema/tables prior to initializing the database."),
 )
 def setup(context, drop):
     """ Initialize a database for openFRED data.
