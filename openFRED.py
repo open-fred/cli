@@ -343,7 +343,7 @@ def chunk(iterable, n):
     return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
 
 
-def import_nc_file(filepath, variables, classes, session):
+def import_nc_file(filepath, variables, schema, url):
     click.echo("Importing: {}".format(filepath))
 
     ds = xr.open_dataset(filepath, decode_cf=False)
@@ -359,10 +359,14 @@ def import_nc_file(filepath, variables, classes, session):
     vs = [v for v in variables if v in ds.variables.keys()]
 
     for name in vs:
-        import_variable(name, ds, time, classes, session)
+        import_variable(name, ds, time, schema, url)
 
 
-def import_variable(name, dataset, time, classes, session):
+def import_variable(name, dataset, schema, url):
+
+    classes = mapped_classes(MetaData(schema=schema))
+
+    with db_session(create_engine(url)) as session:
         ncv = ds[name]
         if time != "time" and not "time:" in ncv.attrs.get("cell_methods", ""):
             time = None
@@ -447,6 +451,8 @@ def import_variable(name, dataset, time, classes, session):
                 l = list(c)
                 session.bulk_insert_mappings(mapper, l)
                 bar.update(len(l))
+        click.echo("  Committing.")
+        session.commit()
     click.echo("     Done: {}\n".format(filepath))
 
 
@@ -608,13 +614,8 @@ def import_(context, paths, variables):
     schema = oemof.db.config.get(section, "schema")
     url = oemof.db.url(section)
 
-    classes = mapped_classes(MetaData(schema=schema))
-
-    with db_session(create_engine(url)) as session:
-        for f in sorted(filepaths):
-            import_nc_file(f, variables, classes, session)
-        click.echo("  Committing.")
-        session.commit()
+    for f in sorted(filepaths):
+        import_nc_file(f, variables, schema, url)
 
 
 if __name__ == "__main__":
