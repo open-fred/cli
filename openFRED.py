@@ -343,7 +343,7 @@ def chunk(iterable, n):
     return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
 
 
-def import_nc_file(filepath, variables, schema, url):
+def import_nc_file(filepath, variables):
     click.echo("Importing: {}".format(filepath))
 
     dataset = xr.open_dataset(filepath, decode_cf=False)
@@ -358,8 +358,7 @@ def import_nc_file(filepath, variables, schema, url):
 
     vs = [v for v in variables if v in dataset.variables.keys()]
 
-    for name in vs:
-        import_variable(name, dataset, time, schema, url)
+    return [{"name": v, "dataset": dataset, "time": time} for v in vs]
 
 
 def import_variable(name, dataset, schema, time, url):
@@ -615,8 +614,15 @@ def import_(context, paths, variables):
     schema = oemof.db.config.get(section, "schema")
     url = oemof.db.url(section)
 
-    for f in sorted(filepaths):
-        import_nc_file(f, variables, schema, url)
+    jobs = {
+        (f, arguments["name"]): dict(
+            arguments, **{"schema": schema, "url": url}
+        )
+        for f in filepaths
+        for arguments in import_nc_file(f, variables)
+    }
+    for job in jobs.values():
+        import_variable(**job)
 
 
 if __name__ == "__main__":
