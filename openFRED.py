@@ -600,15 +600,16 @@ def import_(context, paths, variables):
     i.e. each file with the extension '.nc', found is imported.
     If path points to a file, it is imported as is.
     """
-    filepaths = []
-    for p in paths:
-        if os.path.isfile(p):
-            filepaths.append(p)
-        elif os.path.isdir(p):
-            for (path, _, files) in os.walk(p):
-                for f in files:
-                    if f[-3:] == ".nc":
-                        filepaths.append(os.path.join(path, f))
+    filepaths = [path for path in paths if os.path.isfile(path)]
+    filepaths.extend(
+        [
+            os.path.join(path, filename)
+            for path in paths
+            for (path, _, files) in os.walk(path)
+            for filename in files
+            if filename[-3:] == ".nc"
+        ]
+    )
 
     section = context.obj["db"]["section"]
     schema = oemof.db.config.get(section, "schema")
