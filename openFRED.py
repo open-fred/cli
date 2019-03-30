@@ -346,20 +346,20 @@ def chunk(iterable, n):
 def import_nc_file(filepath, variables, schema, url):
     click.echo("Importing: {}".format(filepath))
 
-    ds = xr.open_dataset(filepath, decode_cf=False)
+    dataset = xr.open_dataset(filepath, decode_cf=False)
     time = (
-        ds["time"].attrs["bounds"]
-        if "time" in ds.coords
-        and "units" in ds[ds["time"].attrs["bounds"]].attrs
+        dataset["time"].attrs["bounds"]
+        if "time" in dataset.coords
+        and "units" in dataset[dataset["time"].attrs["bounds"]].attrs
         else "time"
     )
 
-    ds = xr.decode_cf(ds)
+    dataset = xr.decode_cf(dataset)
 
-    vs = [v for v in variables if v in ds.variables.keys()]
+    vs = [v for v in variables if v in dataset.variables.keys()]
 
     for name in vs:
-        import_variable(name, ds, time, schema, url)
+        import_variable(name, dataset, time, schema, url)
 
 
 def import_variable(name, dataset, schema, time, url):
@@ -367,7 +367,7 @@ def import_variable(name, dataset, schema, time, url):
     classes = mapped_classes(MetaData(schema=schema))
 
     with db_session(create_engine(url)) as session:
-        ncv = ds[name]
+        ncv = dataset[name]
         if time != "time" and not "time:" in ncv.attrs.get("cell_methods", ""):
             time = None
         if hasattr(ncv, "flag_values"):
@@ -381,7 +381,7 @@ def import_variable(name, dataset, schema, time, url):
             kws = {}
         if not time:
             assert not "time" in ncv.coords or (
-                len(ds["time"]) == 1
+                len(dataset["time"]) == 1
                 and not "time:" in ncv.attrs.get("cell_methods", "")
             ), (
                 "Looks like we found a variable which is neither "
@@ -421,15 +421,15 @@ def import_variable(name, dataset, schema, time, url):
         session.commit()
         dbvid = dbv.id
         session.expunge(dbv)
-        dcache = DimensionCache(ds, name, session, classes, time)
+        dcache = DimensionCache(dataset, name, session, classes, time)
         session.commit()
         click.echo("  Importing variable(s).")
         length = reduce(
-            multiply, (ds[d].size for d in ncv.dims if d != "time")
+            multiply, (dataset[d].size for d in ncv.dims if d != "time")
         )
         tuples = it.product(
             *(
-                range(ds[d].size) if d != "time" else [slice(None)]
+                range(dataset[d].size) if d != "time" else [slice(None)]
                 for d in ncv.dims
             )
         )
