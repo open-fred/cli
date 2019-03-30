@@ -362,7 +362,7 @@ def import_nc_file(filepath, variables, schema, url):
         import_variable(name, ds, time, schema, url)
 
 
-def import_variable(name, dataset, schema, url):
+def import_variable(name, dataset, schema, time, url):
 
     classes = mapped_classes(MetaData(schema=schema))
 
