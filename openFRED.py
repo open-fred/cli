@@ -327,17 +327,8 @@ def mapped_classes(metadata):
     return classes
 
 
-# TODO: The two functions below are prime examples of stuff that one can and
-#       should write tests for.
 def maybe(f, o):
     return None if o is None else f(o)
-
-
-def chunk(iterable, n):
-    """ Divide `iterable` into chunks of size `n` without padding.
-    """
-    xs = iter(iterable)
-    return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
 
 
 def import_nc_file(filepath, variables):
@@ -437,10 +428,7 @@ def import_variable(dataset, name, schema, time, url):
             for indexes in tuples
         )
         mapper = classes["Series"]
-        for c in chunk(mappings, 1):
-            l = list(c)
-            session.bulk_insert_mappings(mapper, l)
-            bar.update(len(l))
+        session.bulk_insert_mappings(mapper, mappings)
         click.echo("  Committing.")
         session.commit()
     click.echo("     Done: {}\n".format(filepath))
