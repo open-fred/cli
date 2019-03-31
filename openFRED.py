@@ -430,7 +430,6 @@ def import_variable(dataset, name, schema, time, url):
         mapper = classes["Series"]
         session.bulk_insert_mappings(mapper, mappings)
         click.echo("  Committing.")
-        session.commit()
     click.echo("     Done: {}\n".format(filepath))
 
 
