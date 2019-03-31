@@ -599,10 +599,12 @@ def import_(context, paths, variables):
     i.e. each file with the extension '.nc', found is imported.
     If path points to a file, it is imported as is.
     """
-    filepaths = [path for path in paths if os.path.isfile(path)]
+    filepaths = [
+        os.path.abspath(path) for path in paths if os.path.isfile(path)
+    ]
     filepaths.extend(
         [
-            os.path.join(directory, filename)
+            os.path.abspath(os.path.join(directory, filename))
             for path in paths
             for (directory, _, files) in os.walk(path)
             for filename in files
