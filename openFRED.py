@@ -145,7 +145,6 @@ class DimensionCache:
                 list(
                     self.cache(
                         [slice(None)],
-                        "        Time:",
                         classes["Timespan"],
                         timespan,
                         idonly=True,
@@ -182,7 +181,6 @@ class DimensionCache:
                     list(
                         self.cache(
                             location_index,
-                            "    Location:",
                             classes["Location"],
                             point,
                             idonly=True,
@@ -201,9 +199,9 @@ class DimensionCache:
             ),
         )
 
-    def cache(self, indexes, label, cls, kwargs, idonly=False, exclude=set()):
-        with click.progressbar(indexes, label=label) as bar:
-            for index in bar:
+    def cache(self, indexes, cls, kwargs, idonly=False, exclude=set()):
+        for index in indexes:
+            if True:
                 d = kwargs(index)
                 o = self.session.query(cls).filter_by(
                     **{k: d[k] for k in d if k not in exclude}
@@ -423,18 +421,13 @@ def import_variable(dataset, name, schema, time, url):
         dcache = DimensionCache(dataset, name, session, classes, time)
         session.commit()
         click.echo("  Importing variable(s).")
-        length = reduce(
-            multiply, (dataset[d].size for d in ncv.dims if d != "time")
-        )
         tuples = it.product(
             *(
                 range(dataset[d].size) if d != "time" else [slice(None)]
                 for d in ncv.dims
             )
         )
-        with click.progressbar(
-            length=length, label="{: >{}}:".format(name, 4 + len("location"))
-        ) as bar:
+        if True:
             mappings = (
                 dict(
                     height=maybe(float, dcache.heights[indexes]),
