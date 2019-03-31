@@ -602,9 +602,9 @@ def import_(context, paths, variables):
     filepaths = [path for path in paths if os.path.isfile(path)]
     filepaths.extend(
         [
-            os.path.join(path, filename)
+            os.path.join(directory, filename)
             for path in paths
-            for (path, _, files) in os.walk(path)
+            for (directory, _, files) in os.walk(path)
             for filename in files
             if filename[-3:] == ".nc"
         ]
