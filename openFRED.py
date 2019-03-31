@@ -201,14 +201,13 @@ class DimensionCache:
 
     def cache(self, indexes, cls, kwargs, idonly=False, exclude=set()):
         for index in indexes:
-            if True:
-                d = kwargs(index)
-                o = self.session.query(cls).filter_by(
-                    **{k: d[k] for k in d if k not in exclude}
-                ).one_or_none() or cls(**d)
-                self.session.add(o)
-                self.session.flush()
-                yield (o.id if idonly else o)
+            d = kwargs(index)
+            o = self.session.query(cls).filter_by(
+                **{k: d[k] for k in d if k not in exclude}
+            ).one_or_none() or cls(**d)
+            self.session.add(o)
+            self.session.flush()
+            yield (o.id if idonly else o)
 
 
 ### Auxiliary functions needed by more than one command.
@@ -427,22 +426,21 @@ def import_variable(dataset, name, schema, time, url):
                 for d in ncv.dims
             )
         )
-        if True:
-            mappings = (
-                dict(
-                    height=maybe(float, dcache.heights[indexes]),
-                    values=(round(float(v), 3) for v in ncv.values[indexes]),
-                    timespan_id=dcache.timespans[indexes],
-                    location_id=dcache.locations[indexes],
-                    variable_id=dbvid,
-                )
-                for indexes in tuples
+        mappings = (
+            dict(
+                height=maybe(float, dcache.heights[indexes]),
+                values=(round(float(v), 3) for v in ncv.values[indexes]),
+                timespan_id=dcache.timespans[indexes],
+                location_id=dcache.locations[indexes],
+                variable_id=dbvid,
             )
-            mapper = classes["Series"]
-            for c in chunk(mappings, 1):
-                l = list(c)
-                session.bulk_insert_mappings(mapper, l)
-                bar.update(len(l))
+            for indexes in tuples
+        )
+        mapper = classes["Series"]
+        for c in chunk(mappings, 1):
+            l = list(c)
+            session.bulk_insert_mappings(mapper, l)
+            bar.update(len(l))
         click.echo("  Committing.")
         session.commit()
     click.echo("     Done: {}\n".format(filepath))
