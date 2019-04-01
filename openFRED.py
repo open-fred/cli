@@ -591,7 +591,7 @@ def message(job, message, time=None):
     # [:-7] strips milliseconds from timestamps.
     if not time:
         time = dt.now()
-    return "{}, {}:\n  {}\n".format(str(time)[:-7], job, message)
+    return "{}, {}: {}".format(str(time)[:-7], job, message)
 
 
 def wrap_process(job, messages, function, arguments):
@@ -603,7 +603,9 @@ def wrap_process(job, messages, function, arguments):
     except Exception as e:
         messages.put(
             message(
-                job, "  ".join(TracebackException.from_exception(e).format())
+                job,
+                "\n  "
+                "  ".join(TracebackException.from_exception(e).format()),
             )
         )
         messages.put(message(job, "Failed."))
