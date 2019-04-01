@@ -168,8 +168,9 @@ class Dimensions:
                     transformer=lambda indexes: 0,
                 )
             except SQLAlchemyError as e:
-                yield "Caching time failed. Rolling back. Sleeping 60s."
+                yield "Caching time failed. Rolling back. Sleeping 7s."
                 self.session.rollback()
+                sleep(7)
             else:
                 yield "Time cached."
                 self.session.commit()
@@ -215,8 +216,9 @@ class Dimensions:
                     ),
                 )
             except SQLAlchemyError as e:
-                yield "Caching locations failed. Rolling back. Sleeping 60s."
+                yield "Caching locations failed. Rolling back. Sleeping 7s."
                 self.session.rollback()
+                sleep(7)
             else:
                 yield "Locations cached."
                 self.session.commit()
