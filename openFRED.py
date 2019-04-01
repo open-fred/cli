@@ -1,8 +1,4 @@
 # TODO: Handle Timestamps and Metadata correctly.
-#   * values that are constant wrt. "time"
-#     - have a "units" attribute on "time_bnds"
-#     - don't have a "cell_method" attribute
-#     - still have a "time" coordinate, but it has `len` 1
 #   * Names:
 #     - "standard_name" is not allowed to contain whitespace
 #     - not all variables have a "standard_name"
@@ -25,8 +21,12 @@ from contextlib import contextmanager
 from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
+from math import floor
 from operator import mul as multiply
+from time import sleep
+from traceback import TracebackException
 import itertools as it
+import multiprocessing as mp
 import os
 
 from alembic.migration import MigrationContext
@@ -35,6 +35,7 @@ from geoalchemy2 import WKTElement as WKT, types as geotypes
 from numpy.ma import masked
 from pandas import to_datetime
 from sqlalchemy import (
+    create_engine,
     BigInteger as BI,
     Column as C,
     DateTime as DT,
@@ -50,6 +51,7 @@ from sqlalchemy import (
     UniqueConstraint as UC,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker
 from sqlalchemy.orm.exc import MultipleResultsFound as MRF
@@ -85,7 +87,7 @@ class Keychanger(MM):
         return self.data.__len__()
 
 
-class DimensionCache:
+class Dimensions:
     """ Caches dimension values to speed up access later on.
 
     Iterates through the dimensions of the given variable and gets the
@@ -96,40 +98,43 @@ class DimensionCache:
     `Value`s into the database.
     """
 
-    def __init__(self, ds, v, session, classes, time):
-        d_index = {d: i for i, d in enumerate(ds[v].dims)}
+    def __init__(self, dataset, variable, session, classes, time):
+        self.dataset = dataset
+        self.variable = variable
         self.session = session
-        height = (
+        self.classes = classes
+        self.time = time
+        self.index = {d: i for i, d in enumerate(dataset[variable].dims)}
+        self.height = (
             [
-                float(ds[v])
-                for v in ds.variables.keys()
-                if v.startswith("height")
+                float(dataset[variable])
+                for variable in dataset.variables.keys()
+                if variable.startswith("height")
             ]
             + [0.0]
         )[0]
 
-        click.echo("  Caching dimensions.")
-
+    def cache(self):
         def timespan(index):
-            assert time is not None, (
+            assert self.time is not None, (
                 "Trying to get timespan intervalls for a variable which seems"
                 "\nconstant wrt. to time."
             )
-            assert time in ["time_bnds", "time"], (
+            assert self.time in ["time_bnds", "time"], (
                 "Trying to get timespan intevalls using an invalid argument"
                 "value for `time`\n."
                 'Valid argument values are `"time"` and `"time_bnds"`.\n\n'
                 "  Got: {}"
-            ).format("`None`" if time is None else time)
+            ).format("`None`" if self.time is None else self.time)
             bounds = (
                 [
                     [to_datetime(bnd) for bnd in bnds]
-                    for bnds in ds["time_bnds"][index].values
+                    for bnds in self.dataset["time_bnds"][index].values
                 ]
-                if time == "time_bnds"
+                if self.time == "time_bnds"
                 else [
                     [to_datetime(moment)] * 2
-                    for moment in ds["time"][index].values
+                    for moment in self.dataset["time"][index].values
                 ]
             )
             intervals = [t[1] - t[0] for t in bounds]
@@ -143,28 +148,39 @@ class DimensionCache:
                 "segments": bounds,
             }
 
-        self.timespans = Keychanger(
-            data=(
-                list(
-                    self.cache(
-                        [slice(None)],
-                        "        Time:",
-                        classes["Timespan"],
-                        timespan,
-                        idonly=True,
-                        exclude={"segments"},
-                    )
+        while True:
+            try:
+                yield "Caching time dimension."
+                self.timespans = Keychanger(
+                    data=(
+                        list(
+                            self._cache(
+                                [slice(None)],
+                                self.classes["Timespan"],
+                                timespan,
+                                idonly=True,
+                                exclude={"segments"},
+                            )
+                        )
+                        if "time" in self.dataset.variables
+                        else [None]
+                    ),
+                    transformer=lambda indexes: 0,
                 )
-                if "time" in ds.variables
-                else [None]
-            ),
-            transformer=lambda indexes: 0,
-        )
+            except SQLAlchemyError as e:
+                yield "Caching time failed. Rolling back. Sleeping 7s."
+                self.session.rollback()
+                sleep(7)
+            else:
+                yield "Time cached."
+                self.session.commit()
+                break
 
         def point(key):
             wkt = WKT(
                 "POINT ({} {})".format(
-                    ds["lon"].values[key], ds["lat"].values[key]
+                    self.dataset["lon"].values[key],
+                    self.dataset["lat"].values[key],
                 ),
                 srid=4326,
             )
@@ -173,47 +189,59 @@ class DimensionCache:
         location_index = list(
             it.product(
                 *(
-                    range(len(ds.variables.get(d, ())))
+                    range(len(self.dataset.variables.get(d, ())))
                     for d in ("rlat", "rlon")
                 )
             )
         )
-        self.locations = Keychanger(
-            data=dict(
-                zip(
-                    location_index,
-                    list(
-                        self.cache(
+        while True:
+            try:
+                yield "Caching locations."
+                self.locations = Keychanger(
+                    data=dict(
+                        zip(
                             location_index,
-                            "    Location:",
-                            classes["Location"],
-                            point,
-                            idonly=True,
+                            list(
+                                self._cache(
+                                    location_index,
+                                    self.classes["Location"],
+                                    point,
+                                    idonly=True,
+                                )
+                            ),
                         )
                     ),
+                    transformer=lambda indexes: tuple(
+                        indexes[self.index[d]] for d in ("rlat", "rlon")
+                    ),
                 )
-            ),
-            transformer=lambda indexes: tuple(
-                indexes[d_index[d]] for d in ("rlat", "rlon")
-            ),
-        )
+            except SQLAlchemyError as e:
+                yield "Caching locations failed. Rolling back. Sleeping 7s."
+                self.session.rollback()
+                sleep(7)
+            else:
+                yield "Locations cached."
+                self.session.commit()
+                break
+
         self.heights = Keychanger(
-            data=[height],
+            data=[self.height],
             transformer=lambda ixs: (
-                0 if not d_index.get("height") else ixs[d_index["height"]]
+                0
+                if not self.index.get("height")
+                else ixs[self.index["height"]]
             ),
         )
 
-    def cache(self, indexes, label, cls, kwargs, idonly=False, exclude=set()):
-        with click.progressbar(indexes, label=label) as bar:
-            for index in bar:
-                d = kwargs(index)
-                o = self.session.query(cls).filter_by(
-                    **{k: d[k] for k in d if k not in exclude}
-                ).one_or_none() or cls(**d)
-                self.session.add(o)
-                self.session.flush()
-                yield (o.id if idonly else o)
+    def _cache(self, indexes, cls, kwargs, idonly=False, exclude=set()):
+        for index in indexes:
+            d = kwargs(index)
+            o = self.session.query(cls).filter_by(
+                **{k: d[k] for k in d if k not in exclude}
+            ).one_or_none() or cls(**d)
+            self.session.add(o)
+            self.session.flush()
+            yield (o.id if idonly else o)
 
 
 ### Auxiliary functions needed by more than one command.
@@ -333,42 +361,55 @@ def mapped_classes(metadata):
     return classes
 
 
-# TODO: The two functions below are prime examples of stuff that one can and
-#       should write tests for.
 def maybe(f, o):
     return None if o is None else f(o)
 
 
-def chunk(iterable, n):
+def chunks(iterable, n):
     """ Divide `iterable` into chunks of size `n` without padding.
     """
     xs = iter(iterable)
     return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
 
 
-def import_nc_file(filepath, variables, classes, session):
-    click.echo("Importing: {}".format(filepath))
+def import_nc_file(filepath, variables):
 
-    ds = xr.open_dataset(filepath, decode_cf=False)
-    time = None
-    if "time" in ds.variables:
-        time = "time_bnds" if "units" in ds["time_bnds"].attrs else "time"
-    ds = xr.decode_cf(ds)
+    # TODO: Specify whether a variable is constant wrt. a dimension via the
+    #       command line.
+    # It seems that the whole "cell_methods" and "units" heuristic doesn't
+    # really work. So we're back to being simple again. If there's a
+    # "cell_methods" attribute containing "time", the value is aggregatet,
+    # otherwise it's istantaneous. Being constant wrt. time has to be specified
+    # manually.
 
-    vs = (
-        [v for v in variables if v in ds.variables.keys()]
-        if variables
-        # TODO?: Stop automatically detecting variables to import, since this
-        #        probably doesn't work.
-        else [
-            v
-            for v in ds.variables.keys()
-            if hasattr(ds.variables[v], "coordinates")
-        ]
-    )
+    dataset = xr.open_dataset(filepath, decode_cf=False)
+    if (
+        "time" in dataset.variables
+        and not "units" in dataset[dataset["time"].attrs["bounds"]].attrs
+    ):
+        dataset["time_bnds"].attrs["units"] = dataset["time"].units
+    dataset = xr.decode_cf(dataset)
 
-    for name in vs:
-        ncv = ds[name]
+    vs = [v for v in variables if v in dataset.variables.keys()]
+
+    return [
+        {
+            "name": v,
+            "dataset": dataset,
+            "time": dataset["time"].attrs["bounds"]
+            if "time:" in dataset[v].attrs.get("cell_methods", "")
+            else "time",
+        }
+        for v in vs
+    ]
+
+
+def import_variable(dataset, name, schema, time, url):
+
+    classes = mapped_classes(MetaData(schema=schema))
+
+    with db_session(create_engine(url)) as session:
+        ncv = dataset[name]
         if hasattr(ncv, "flag_values"):
             variable = classes["Flags"]
             kws = {
@@ -378,30 +419,12 @@ def import_nc_file(filepath, variables, classes, session):
         else:
             variable = classes["Variable"]
             kws = {}
-        if not time:
-            assert not "time" in ncv.coords or (
-                len(ds["time"]) == 1
-                and not "time:" in ncv.attrs.get("cell_methods", "")
-            ), (
-                "Looks like we found a variable which is neither "
-                "instantaneous nor "
-                "constant wrt. time but also either doesn't have a "
-                "`cell_methods` attribute\n"
-                "or it has one that doesn't have `time` entry.\n\n"
-                "  variable name: {}\n"
-                "  cell_methods : {}"
-            ).format(
-                ncv.name,
-                "`None`"
-                if ncv.attrs.get("cell_methods") is None
-                else ncv.attrs.get("cell_methods"),
-            )
         if time == "time":
             assert not "time:" in ncv.attrs.get("cell_methods", ""), (
                 "Looks like we found a variable which is instantaneous or "
                 "constant wrt. time\n"
-                "but also has a `cell_methods` attribute with a `time` entry.\n"
-                "These things aren't compatible.\n\n"
+                "but also has a `cell_methods` attribute with a `time` entry."
+                "\nThese things aren't compatible.\n\n"
                 "  variable name: {}\n"
                 "  cell_methods : {}"
             ).format(ncv.name, ncv.attrs.get("cell_methods"))
@@ -420,37 +443,33 @@ def import_nc_file(filepath, variables, classes, session):
         session.commit()
         dbvid = dbv.id
         session.expunge(dbv)
-        dcache = DimensionCache(ds, name, session, classes, time)
+        dimensions = Dimensions(dataset, name, session, classes, time)
+        for message in dimensions.cache():
+            yield message
         session.commit()
-        click.echo("  Importing variable(s).")
-        length = reduce(
-            multiply, (ds[d].size for d in ncv.dims if d != "time")
-        )
+        yield "Importing variable(s)."
         tuples = it.product(
             *(
-                range(ds[d].size) if d != "time" else [slice(None)]
+                range(dataset[d].size) if d != "time" else [slice(None)]
                 for d in ncv.dims
             )
         )
-        with click.progressbar(
-            length=length, label="{: >{}}:".format(name, 4 + len("location"))
-        ) as bar:
-            mappings = (
-                dict(
-                    height=maybe(float, dcache.heights[indexes]),
-                    values=(round(float(v), 3) for v in ncv.values[indexes]),
-                    timespan_id=dcache.timespans[indexes],
-                    location_id=dcache.locations[indexes],
-                    variable_id=dbvid,
-                )
-                for indexes in tuples
+        mappings = (
+            dict(
+                height=maybe(float, dimensions.heights[indexes]),
+                values=(round(float(v), 3) for v in ncv.values[indexes]),
+                timespan_id=dimensions.timespans[indexes],
+                location_id=dimensions.locations[indexes],
+                variable_id=dbvid,
             )
-            mapper = classes["Series"]
-            for c in chunk(mappings, 1):
-                l = list(c)
-                session.bulk_insert_mappings(mapper, l)
-                bar.update(len(l))
-    click.echo("     Done: {}\n".format(filepath))
+            for indexes in tuples
+            # if ncv[indexes] is not masked
+        )
+        mapper = classes["Series"]
+        for chunk in chunks(mappings, 74):
+            session.bulk_insert_mappings(mapper, chunk)
+        yield "Committing."
+    yield "Done."
 
 
 ### The commmands comprising the command line interface.
@@ -574,6 +593,59 @@ def setup(context, drop):
     return classes
 
 
+def monitor(paths):
+    files = {
+        os.path.abspath(os.path.join(directory, filename))
+        for path in paths
+        for (directory, _, files) in os.walk(path)
+        for filename in files
+        if filename[-3:] == ".nc"
+    }
+    return files
+
+
+def message(job, message, time=None):
+    # [:-7] strips milliseconds from timestamps.
+    if not time:
+        time = dt.now()
+    return "{}, {}: {}".format(str(time)[:-7], job, message)
+
+
+def wrap_process(job, messages, function, arguments):
+    result = {"started": dt.now()}
+    try:
+        messages.put(message(job, "Started.", result["started"]))
+        for notification in function(**arguments):
+            messages.put(message(job, notification))
+    except Exception as e:
+        messages.put(
+            message(
+                job,
+                "\n  "
+                "  ".join(TracebackException.from_exception(e).format()),
+            )
+        )
+        messages.put(message(job, "Failed."))
+        result["error"] = e
+    finally:
+        result["finished"] = dt.now()
+        duration = result["finished"] - result["started"]
+        hours = floor(duration.seconds / 3600)
+        minutes = floor(duration.seconds / 60) - hours * 60
+        seconds = duration.total_seconds() - hours * 3600 - minutes * 60
+        messages.put(
+            message(
+                job,
+                "Finished in {}{}{}".format(
+                    "{}h, ".format(hours) if hours else "",
+                    "{}m and ".format(minutes) if minutes or hours else "",
+                    "{:.3f}s.".format(seconds),
+                ),
+                result["finished"],
+            )
+        )
+
+
 @db.command("import")
 @click.pass_context
 @click.argument(
@@ -586,40 +658,84 @@ def setup(context, drop):
     multiple=True,
     help=(
         "Specify the variable to import. Can be specified "
-        "multiple times. If not specified, a custom "
-        "(as of now wonky, hacky and probably buggy) "
-        "detection scheme ist used."
+        "multiple times. If not specified, nothing is imported."
     ),
 )
-def import_(context, paths, variables):
+@click.option(
+    "--jobs",
+    "-j",
+    metavar="JOBS",
+    default=1,
+    show_default=True,
+    help=(
+        "The number parallel processes to start, in order to handle import jobs."
+    ),
+)
+def import_(context, jobs, paths, variables):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
     If path is a directory, it is traversed (recursively) and each NetCDF file,
-    i.e. each file with the extension '.nc', found is imported.
+    i.e. each file with the extension '.nc', found is imported. These directories
+    are also continuously monitored for new files, which are imported too.
     If path points to a file, it is imported as is.
     """
-    filepaths = []
-    for p in paths:
-        if os.path.isfile(p):
-            filepaths.append(p)
-        elif os.path.isdir(p):
-            for (path, _, files) in os.walk(p):
-                for f in files:
-                    if f[-3:] == ".nc":
-                        filepaths.append(os.path.join(path, f))
+    filepaths = {
+        os.path.abspath(path) for path in paths if os.path.isfile(path)
+    }
 
     section = context.obj["db"]["section"]
     schema = oemof.db.config.get(section, "schema")
-    engine = oemof.db.engine(section)
+    url = oemof.db.url(section)
 
-    classes = mapped_classes(MetaData(schema=schema))
+    seen = set()
+    manager = mp.Manager()
+    messages = manager.Queue()
+    pool = mp.Pool(jobs, maxtasksperchild=1)
+    results = {"done": {}, "pending": {}}
+    while True:
+        filepaths.update(monitor(paths).difference(seen))
+        results["pending"].update(
+            {
+                job: pool.apply_async(
+                    wrap_process,
+                    kwds={
+                        "job": job,
+                        "messages": messages,
+                        "function": import_variable,
+                        "arguments": dict(
+                            arguments, **{"schema": schema, "url": url}
+                        ),
+                    },
+                )
+                for filepath in filepaths
+                if not messages.put(
+                    message(
+                        "Main Process ({})".format(os.getpid()),
+                        "Collecting {}.".format(filepath),
+                    )
+                )
+                for arguments in import_nc_file(filepath, variables)
+                for job in ["{}, {}".format(filepath, arguments["name"])]
+            }
+        )
+        seen.update(filepaths)
+        filepaths.clear()
 
-    with db_session(engine) as session:
-        for f in sorted(filepaths):
-            import_nc_file(f, variables, classes, session)
-        click.echo("  Committing.")
-        session.commit()
+        if not results["pending"] and messages.empty():
+            break
+
+        move = [
+            (job, result)
+            for job, result in results["pending"].items()
+            if result.ready()
+        ]
+        for job, result in move:
+            del results["pending"][job]
+            results["done"][job] = result.get()
+        while not messages.empty():
+            click.echo(messages.get_nowait())
+        sleep(1)
 
 
 if __name__ == "__main__":
