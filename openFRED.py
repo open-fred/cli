@@ -339,6 +339,13 @@ def maybe(f, o):
     return None if o is None else f(o)
 
 
+def chunks(iterable, n):
+    """ Divide `iterable` into chunks of size `n` without padding.
+    """
+    xs = iter(iterable)
+    return (it.chain((x,), it.islice(xs, n - 1)) for x in xs)
+
+
 def import_nc_file(filepath, variables):
     click.echo("Importing: {}".format(filepath))
 
@@ -437,7 +444,8 @@ def import_variable(dataset, name, schema, time, url):
             for indexes in tuples
         )
         mapper = classes["Series"]
-        session.bulk_insert_mappings(mapper, mappings)
+        for chunk in chunks(mappings, 74):
+            session.bulk_insert_mappings(mapper, chunk)
         click.echo("  Committing.")
     click.echo("     Done: {}\n".format(filepath))
 
