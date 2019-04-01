@@ -374,19 +374,34 @@ def chunks(iterable, n):
 
 def import_nc_file(filepath, variables):
 
-    dataset = xr.open_dataset(filepath, decode_cf=False)
-    time = (
-        dataset["time"].attrs["bounds"]
-        if "time" in dataset.coords
-        and "units" in dataset[dataset["time"].attrs["bounds"]].attrs
-        else "time"
-    )
+    # TODO: Specify whether a variable is constant wrt. a dimension via the
+    #       command line.
+    # It seems that the whole "cell_methods" and "units" heuristic doesn't
+    # really work. So we're back to being simple again. If there's a
+    # "cell_methods" attribute containing "time", the value is aggregatet,
+    # otherwise it's istantaneous. Being constant wrt. time has to be specified
+    # manually.
 
+    dataset = xr.open_dataset(filepath, decode_cf=False)
+    if (
+        "time" in dataset.variables
+        and not "units" in dataset[dataset["time"].attrs["bounds"]].attrs
+    ):
+        dataset["time_bnds"].attrs["units"] = dataset["time"].units
     dataset = xr.decode_cf(dataset)
 
     vs = [v for v in variables if v in dataset.variables.keys()]
 
-    return [{"name": v, "dataset": dataset, "time": time} for v in vs]
+    return [
+        {
+            "name": v,
+            "dataset": dataset,
+            "time": dataset["time"].attrs["bounds"]
+            if "time:" in dataset[v].attrs.get("cell_methods", "")
+            else "time",
+        }
+        for v in vs
+    ]
 
 
 def import_variable(dataset, name, schema, time, url):
@@ -395,8 +410,6 @@ def import_variable(dataset, name, schema, time, url):
 
     with db_session(create_engine(url)) as session:
         ncv = dataset[name]
-        if time != "time" and not "time:" in ncv.attrs.get("cell_methods", ""):
-            time = None
         if hasattr(ncv, "flag_values"):
             variable = classes["Flags"]
             kws = {
@@ -406,24 +419,6 @@ def import_variable(dataset, name, schema, time, url):
         else:
             variable = classes["Variable"]
             kws = {}
-        if not time:
-            assert not "time" in ncv.coords or (
-                len(dataset["time"]) == 1
-                and not "time:" in ncv.attrs.get("cell_methods", "")
-            ), (
-                "Looks like we found a variable which is neither "
-                "instantaneous nor "
-                "constant wrt. time but also either doesn't have a "
-                "`cell_methods` attribute\n"
-                "or it has one that doesn't have `time` entry.\n\n"
-                "  variable name: {}\n"
-                "  cell_methods : {}"
-            ).format(
-                ncv.name,
-                "`None`"
-                if ncv.attrs.get("cell_methods") is None
-                else ncv.attrs.get("cell_methods"),
-            )
         if time == "time":
             assert not "time:" in ncv.attrs.get("cell_methods", ""), (
                 "Looks like we found a variable which is instantaneous or "
