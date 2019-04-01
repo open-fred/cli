@@ -642,7 +642,17 @@ def wrap_process(job, messages, function, arguments):
         "multiple times. If not specified, nothing is imported."
     ),
 )
-def import_(context, paths, variables):
+@click.option(
+    "--jobs",
+    "-j",
+    metavar="JOBS",
+    default=1,
+    show_default=True,
+    help=(
+        "The number parallel processes to start, in order to handle import jobs."
+    ),
+)
+def import_(context, jobs, paths, variables):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
@@ -662,7 +672,7 @@ def import_(context, paths, variables):
     seen = set()
     manager = mp.Manager()
     messages = manager.Queue()
-    pool = mp.Pool(1, maxtasksperchild=1)
+    pool = mp.Pool(jobs, maxtasksperchild=1)
     results = {"done": {}, "pending": {}}
     while True:
         filepaths.update(monitor(paths).difference(seen))
