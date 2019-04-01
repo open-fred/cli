@@ -82,7 +82,7 @@ class Keychanger(MM):
         return self.data.__len__()
 
 
-class DimensionCache:
+class Dimensions:
     """ Caches dimension values to speed up access later on.
 
     Iterates through the dimensions of the given variable and gets the
@@ -93,40 +93,45 @@ class DimensionCache:
     `Value`s into the database.
     """
 
-    def __init__(self, ds, v, session, classes, time):
-        d_index = {d: i for i, d in enumerate(ds[v].dims)}
+    def __init__(self, dataset, variable, session, classes, time):
+        self.dataset = dataset
+        self.variable = variable
         self.session = session
-        height = (
+        self.classes = classes
+        self.time = time
+        self.index = {d: i for i, d in enumerate(dataset[variable].dims)}
+        self.height = (
             [
-                float(ds[v])
-                for v in ds.variables.keys()
-                if v.startswith("height")
+                float(dataset[variable])
+                for variable in dataset.variables.keys()
+                if variable.startswith("height")
             ]
             + [0.0]
         )[0]
 
         click.echo("  Caching dimensions.")
 
+    def cache(self):
         def timespan(index):
-            assert time is not None, (
+            assert self.time is not None, (
                 "Trying to get timespan intervalls for a variable which seems"
                 "\nconstant wrt. to time."
             )
-            assert time in ["time_bnds", "time"], (
+            assert self.time in ["time_bnds", "time"], (
                 "Trying to get timespan intevalls using an invalid argument"
                 "value for `time`\n."
                 'Valid argument values are `"time"` and `"time_bnds"`.\n\n'
                 "  Got: {}"
-            ).format("`None`" if time is None else time)
+            ).format("`None`" if self.time is None else self.time)
             bounds = (
                 [
                     [to_datetime(bnd) for bnd in bnds]
-                    for bnds in ds["time_bnds"][index].values
+                    for bnds in self.dataset["time_bnds"][index].values
                 ]
-                if time == "time_bnds"
+                if self.time == "time_bnds"
                 else [
                     [to_datetime(moment)] * 2
-                    for moment in ds["time"][index].values
+                    for moment in self.dataset["time"][index].values
                 ]
             )
             intervals = [t[1] - t[0] for t in bounds]
@@ -143,15 +148,15 @@ class DimensionCache:
         self.timespans = Keychanger(
             data=(
                 list(
-                    self.cache(
+                    self._cache(
                         [slice(None)],
-                        classes["Timespan"],
+                        self.classes["Timespan"],
                         timespan,
                         idonly=True,
                         exclude={"segments"},
                     )
                 )
-                if "time" in ds.variables
+                if "time" in self.dataset.variables
                 else [None]
             ),
             transformer=lambda indexes: 0,
@@ -160,7 +165,8 @@ class DimensionCache:
         def point(key):
             wkt = WKT(
                 "POINT ({} {})".format(
-                    ds["lon"].values[key], ds["lat"].values[key]
+                    self.dataset["lon"].values[key],
+                    self.dataset["lat"].values[key],
                 ),
                 srid=4326,
             )
@@ -169,7 +175,7 @@ class DimensionCache:
         location_index = list(
             it.product(
                 *(
-                    range(len(ds.variables.get(d, ())))
+                    range(len(self.dataset.variables.get(d, ())))
                     for d in ("rlat", "rlon")
                 )
             )
@@ -179,9 +185,9 @@ class DimensionCache:
                 zip(
                     location_index,
                     list(
-                        self.cache(
+                        self._cache(
                             location_index,
-                            classes["Location"],
+                            self.classes["Location"],
                             point,
                             idonly=True,
                         )
@@ -189,17 +195,19 @@ class DimensionCache:
                 )
             ),
             transformer=lambda indexes: tuple(
-                indexes[d_index[d]] for d in ("rlat", "rlon")
+                indexes[self.index[d]] for d in ("rlat", "rlon")
             ),
         )
         self.heights = Keychanger(
-            data=[height],
+            data=[self.height],
             transformer=lambda ixs: (
-                0 if not d_index.get("height") else ixs[d_index["height"]]
+                0
+                if not self.index.get("height")
+                else ixs[self.index["height"]]
             ),
         )
 
-    def cache(self, indexes, cls, kwargs, idonly=False, exclude=set()):
+    def _cache(self, indexes, cls, kwargs, idonly=False, exclude=set()):
         for index in indexes:
             d = kwargs(index)
             o = self.session.query(cls).filter_by(
@@ -408,7 +416,8 @@ def import_variable(dataset, name, schema, time, url):
         session.commit()
         dbvid = dbv.id
         session.expunge(dbv)
-        dcache = DimensionCache(dataset, name, session, classes, time)
+        dimensions = Dimensions(dataset, name, session, classes, time)
+        dimensions.cache()
         session.commit()
         click.echo("  Importing variable(s).")
         tuples = it.product(
@@ -419,10 +428,10 @@ def import_variable(dataset, name, schema, time, url):
         )
         mappings = (
             dict(
-                height=maybe(float, dcache.heights[indexes]),
+                height=maybe(float, dimensions.heights[indexes]),
                 values=(round(float(v), 3) for v in ncv.values[indexes]),
-                timespan_id=dcache.timespans[indexes],
-                location_id=dcache.locations[indexes],
+                timespan_id=dimensions.timespans[indexes],
+                location_id=dimensions.locations[indexes],
                 variable_id=dbvid,
             )
             for indexes in tuples
