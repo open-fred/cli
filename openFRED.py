@@ -622,7 +622,7 @@ def wrap_process(job, messages, function, arguments):
                 "Finished in {}{}{}".format(
                     "{}h, ".format(hours) if hours else "",
                     "{}m and ".format(minutes) if minutes or hours else "",
-                    "{}s.".format(seconds),
+                    "{:.3f}s.".format(seconds),
                 ),
                 result["finished"],
             )
