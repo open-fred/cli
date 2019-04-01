@@ -351,7 +351,6 @@ def chunks(iterable, n):
 
 
 def import_nc_file(filepath, variables):
-    click.echo("Importing: {}".format(filepath))
 
     dataset = xr.open_dataset(filepath, decode_cf=False)
     time = (
@@ -577,6 +576,17 @@ def setup(context, drop):
     return classes
 
 
+def monitor(paths):
+    files = {
+        os.path.abspath(os.path.join(directory, filename))
+        for path in paths
+        for (directory, _, files) in os.walk(path)
+        for filename in files
+        if filename[-3:] == ".nc"
+    }
+    return files
+
+
 def message(job, message, time=None):
     # [:-7] strips milliseconds from timestamps.
     if not time:
@@ -637,53 +647,55 @@ def import_(context, paths, variables):
 
     For each path found in PATHS, imports the NetCDF files found under path.
     If path is a directory, it is traversed (recursively) and each NetCDF file,
-    i.e. each file with the extension '.nc', found is imported.
+    i.e. each file with the extension '.nc', found is imported. These directories
+    are also continuously monitored for new files, which are imported too.
     If path points to a file, it is imported as is.
     """
     filepaths = {
         os.path.abspath(path) for path in paths if os.path.isfile(path)
     }
-    filepaths.update(
-        [
-            os.path.abspath(os.path.join(directory, filename))
-            for path in paths
-            for (directory, _, files) in os.walk(path)
-            for filename in files
-            if filename[-3:] == ".nc"
-        ]
-    )
 
     section = context.obj["db"]["section"]
     schema = oemof.db.config.get(section, "schema")
     url = oemof.db.url(section)
 
-    jobs = {
-        (f, arguments["name"]): dict(
-            arguments, **{"schema": schema, "url": url}
-        )
-        for f in filepaths
-        for arguments in import_nc_file(f, variables)
-    }
-
+    seen = set()
     manager = mp.Manager()
     messages = manager.Queue()
     pool = mp.Pool(1, maxtasksperchild=1)
-    results = {
-        "pending": {
-            job: pool.apply_async(
-                wrap_process,
-                kwds={
-                    "job": job,
-                    "messages": messages,
-                    "function": import_variable,
-                    "arguments": arguments,
-                },
-            )
-            for job, arguments in jobs.items()
-        },
-        "done": {},
-    }
-    while results["pending"] or not messages.empty():
+    results = {"done": {}, "pending": {}}
+    while True:
+        filepaths.update(monitor(paths).difference(seen))
+        results["pending"].update(
+            {
+                job: pool.apply_async(
+                    wrap_process,
+                    kwds={
+                        "job": job,
+                        "messages": messages,
+                        "function": import_variable,
+                        "arguments": dict(
+                            arguments, **{"schema": schema, "url": url}
+                        ),
+                    },
+                )
+                for filepath in filepaths
+                if not messages.put(
+                    message(
+                        "Main Process ({})".format(os.getpid()),
+                        "Collecting {}.".format(filepath),
+                    )
+                )
+                for arguments in import_nc_file(filepath, variables)
+                for job in ["{}, {}".format(filepath, arguments["name"])]
+            }
+        )
+        seen.update(filepaths)
+        filepaths.clear()
+
+        if not results["pending"] and messages.empty():
+            break
+
         move = [
             (job, result)
             for job, result in results["pending"].items()
