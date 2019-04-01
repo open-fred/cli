@@ -51,6 +51,7 @@ from sqlalchemy import (
     UniqueConstraint as UC,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, relationship, sessionmaker
 from sqlalchemy.orm.exc import MultipleResultsFound as MRF
@@ -147,23 +148,32 @@ class Dimensions:
                 "segments": bounds,
             }
 
-        yield "Caching time dimension."
-        self.timespans = Keychanger(
-            data=(
-                list(
-                    self._cache(
-                        [slice(None)],
-                        self.classes["Timespan"],
-                        timespan,
-                        idonly=True,
-                        exclude={"segments"},
-                    )
+        while True:
+            try:
+                yield "Caching time dimension."
+                self.timespans = Keychanger(
+                    data=(
+                        list(
+                            self._cache(
+                                [slice(None)],
+                                self.classes["Timespan"],
+                                timespan,
+                                idonly=True,
+                                exclude={"segments"},
+                            )
+                        )
+                        if "time" in self.dataset.variables
+                        else [None]
+                    ),
+                    transformer=lambda indexes: 0,
                 )
-                if "time" in self.dataset.variables
-                else [None]
-            ),
-            transformer=lambda indexes: 0,
-        )
+            except SQLAlchemyError as e:
+                yield "Caching time failed. Rolling back. Sleeping 60s."
+                self.session.rollback()
+            else:
+                yield "Time cached."
+                self.session.commit()
+                break
 
         def point(key):
             wkt = WKT(
@@ -183,25 +193,35 @@ class Dimensions:
                 )
             )
         )
-        yield "Caching locations."
-        self.locations = Keychanger(
-            data=dict(
-                zip(
-                    location_index,
-                    list(
-                        self._cache(
+        while True:
+            try:
+                yield "Caching locations."
+                self.locations = Keychanger(
+                    data=dict(
+                        zip(
                             location_index,
-                            self.classes["Location"],
-                            point,
-                            idonly=True,
+                            list(
+                                self._cache(
+                                    location_index,
+                                    self.classes["Location"],
+                                    point,
+                                    idonly=True,
+                                )
+                            ),
                         )
                     ),
+                    transformer=lambda indexes: tuple(
+                        indexes[self.index[d]] for d in ("rlat", "rlon")
+                    ),
                 )
-            ),
-            transformer=lambda indexes: tuple(
-                indexes[self.index[d]] for d in ("rlat", "rlon")
-            ),
-        )
+            except SQLAlchemyError as e:
+                yield "Caching locations failed. Rolling back. Sleeping 60s."
+                self.session.rollback()
+            else:
+                yield "Locations cached."
+                self.session.commit()
+                break
+
         self.heights = Keychanger(
             data=[self.height],
             transformer=lambda ixs: (
