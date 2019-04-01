@@ -21,8 +21,12 @@ from contextlib import contextmanager
 from collections.abc import MutableMapping as MM
 from datetime import datetime as dt, timedelta as td, timezone as tz
 from functools import reduce
+from math import floor
 from operator import mul as multiply
+from time import sleep
+from traceback import TracebackException
 import itertools as it
+import multiprocessing as mp
 import os
 
 from alembic.migration import MigrationContext
@@ -109,8 +113,6 @@ class Dimensions:
             + [0.0]
         )[0]
 
-        click.echo("  Caching dimensions.")
-
     def cache(self):
         def timespan(index):
             assert self.time is not None, (
@@ -145,6 +147,7 @@ class Dimensions:
                 "segments": bounds,
             }
 
+        yield "Caching time dimension."
         self.timespans = Keychanger(
             data=(
                 list(
@@ -180,6 +183,7 @@ class Dimensions:
                 )
             )
         )
+        yield "Caching locations."
         self.locations = Keychanger(
             data=dict(
                 zip(
@@ -424,9 +428,10 @@ def import_variable(dataset, name, schema, time, url):
         dbvid = dbv.id
         session.expunge(dbv)
         dimensions = Dimensions(dataset, name, session, classes, time)
-        dimensions.cache()
+        for message in dimensions.cache():
+            yield message
         session.commit()
-        click.echo("  Importing variable(s).")
+        yield "Importing variable(s)."
         tuples = it.product(
             *(
                 range(dataset[d].size) if d != "time" else [slice(None)]
@@ -442,12 +447,13 @@ def import_variable(dataset, name, schema, time, url):
                 variable_id=dbvid,
             )
             for indexes in tuples
+            # if ncv[indexes] is not masked
         )
         mapper = classes["Series"]
         for chunk in chunks(mappings, 74):
             session.bulk_insert_mappings(mapper, chunk)
-        click.echo("  Committing.")
-    click.echo("     Done: {}\n".format(filepath))
+        yield "Committing."
+    yield "Done."
 
 
 ### The commmands comprising the command line interface.
@@ -571,6 +577,46 @@ def setup(context, drop):
     return classes
 
 
+def message(job, message, time=None):
+    # [:-7] strips milliseconds from timestamps.
+    if not time:
+        time = dt.now()
+    return "{}, {}:\n  {}\n".format(str(time)[:-7], job, message)
+
+
+def wrap_process(job, messages, function, arguments):
+    result = {"started": dt.now()}
+    try:
+        messages.put(message(job, "Started.", result["started"]))
+        for notification in function(**arguments):
+            messages.put(message(job, notification))
+    except Exception as e:
+        messages.put(
+            message(
+                job, "  ".join(TracebackException.from_exception(e).format())
+            )
+        )
+        messages.put(message(job, "Failed."))
+        result["error"] = e
+    finally:
+        result["finished"] = dt.now()
+        duration = result["finished"] - result["started"]
+        hours = floor(duration.seconds / 3600)
+        minutes = floor(duration.seconds / 60) - hours * 60
+        seconds = duration.total_seconds() - hours * 3600 - minutes * 60
+        messages.put(
+            message(
+                job,
+                "Finished in {}{}{}".format(
+                    "{}h, ".format(hours) if hours else "",
+                    "{}m and ".format(minutes) if minutes or hours else "",
+                    "{}s.".format(seconds),
+                ),
+                result["finished"],
+            )
+        )
+
+
 @db.command("import")
 @click.pass_context
 @click.argument(
@@ -618,8 +664,37 @@ def import_(context, paths, variables):
         for f in filepaths
         for arguments in import_nc_file(f, variables)
     }
-    for job in jobs.values():
-        import_variable(**job)
+
+    manager = mp.Manager()
+    messages = manager.Queue()
+    pool = mp.Pool(1, maxtasksperchild=1)
+    results = {
+        "pending": {
+            job: pool.apply_async(
+                wrap_process,
+                kwds={
+                    "job": job,
+                    "messages": messages,
+                    "function": import_variable,
+                    "arguments": arguments,
+                },
+            )
+            for job, arguments in jobs.items()
+        },
+        "done": {},
+    }
+    while results["pending"] or not messages.empty():
+        move = [
+            (job, result)
+            for job, result in results["pending"].items()
+            if result.ready()
+        ]
+        for job, result in move:
+            del results["pending"][job]
+            results["done"][job] = result.get()
+        while not messages.empty():
+            click.echo(messages.get_nowait())
+        sleep(1)
 
 
 if __name__ == "__main__":
