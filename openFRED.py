@@ -710,6 +710,10 @@ def import_(context, jobs, paths, variables):
                     },
                 )
                 for filepath in filepaths
+                # This `if` block will never filter out anything, because
+                # `not messages.put` always evaluates to `True`. The block is
+                # only here for the side effect of putting an appropriate
+                # message on the message queue.
                 if not messages.put(
                     message(
                         "Main Process ({})".format(os.getpid()),
