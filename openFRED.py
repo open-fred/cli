@@ -678,6 +678,7 @@ def import_(context, jobs, paths, variables):
     If path is a directory, it is traversed (recursively) and each NetCDF file,
     i.e. each file with the extension '.nc', found is imported. These directories
     are also continuously monitored for new files, which are imported too.
+
     If path points to a file, it is imported as is.
     """
     filepaths = {
