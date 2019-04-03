@@ -614,18 +614,20 @@ def message(job, message, time=None):
 def wrap_process(job, messages, function, arguments):
     result = {"started": dt.now()}
     try:
-        messages.put(message(job, "Started.", result["started"]))
+        messages.put(
+            message("{}, {}".format(*job), "Started.", result["started"])
+        )
         for notification in function(**arguments):
-            messages.put(message(job, notification))
+            messages.put(message("{}, {}".format(*job), notification))
     except Exception as e:
         messages.put(
             message(
-                job,
+                "{}, {}".format(*job),
                 "\n  "
                 "  ".join(TracebackException.from_exception(e).format()),
             )
         )
-        messages.put(message(job, "Failed."))
+        messages.put(message("{}, {}".format(*job), "Failed."))
         result["error"] = e
     finally:
         result["finished"] = dt.now()
@@ -635,7 +637,7 @@ def wrap_process(job, messages, function, arguments):
         seconds = duration.total_seconds() - hours * 3600 - minutes * 60
         messages.put(
             message(
-                job,
+                "{}, {}".format(*job),
                 "Finished in {}{}{}".format(
                     "{}h, ".format(hours) if hours else "",
                     "{}m and ".format(minutes) if minutes or hours else "",
@@ -716,7 +718,7 @@ def import_(context, jobs, paths, variables):
                     )
                 )
                 for arguments in import_nc_file(filepath, variables)
-                for job in ["{}, {}".format(filepath, arguments["name"])]
+                for job in [(filepath, arguments["name"])]
             }
         )
         seen.update(filepaths)
