@@ -673,7 +673,21 @@ def wrap_process(job, messages, function, arguments):
         "The number parallel processes to start, in order to handle import jobs."
     ),
 )
-def import_(context, jobs, paths, variables):
+@click.option(
+    "--cleanup/--no-cleanup",
+    "-c",
+    metavar="CLEANUP",
+    default=False,
+    show_default=True,
+    help=(
+        "Clean up after processing a file, i.e. delete it once every "
+        "specified variable it contains is imported.\n"
+        "WARNING: If you don't specify any variables or there are typos in "
+        "your variable specifications, this might delete a lot of files "
+        "really fast. Don't use this on data you don't have backups of."
+    ),
+)
+def import_(context, cleanup, jobs, paths, variables):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
@@ -723,6 +737,19 @@ def import_(context, jobs, paths, variables):
         )
         seen.update(filepaths)
         filepaths.clear()
+
+        if cleanup:
+            for path in seen.difference(
+                path for path, _ in results["pending"]
+            ):
+                if os.path.isfile(path):
+                    os.remove(path)
+                    messages.put(
+                        message(
+                            "Main Process ({})".format(os.getpid()),
+                            "Deleting {}.".format(path),
+                        )
+                    )
 
         if not results["pending"] and messages.empty():
             break
