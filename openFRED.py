@@ -489,9 +489,7 @@ def openFRED(context):
     "--configuration-file",
     "-c",
     type=click.Path(exists=True),
-    help=(
-        "Specifies an alternative configuration file used by `oemof.db`."
-    ),
+    help=("Specifies an alternative configuration file used by `oemof.db`."),
 )
 @click.option(
     "--section",
