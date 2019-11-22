@@ -612,18 +612,20 @@ def message(job, message, time=None):
 def wrap_process(job, messages, function, arguments):
     result = {"started": dt.now()}
     try:
-        messages.put(message(job, "Started.", result["started"]))
+        messages.put(
+            message("{}, {}".format(*job), "Started.", result["started"])
+        )
         for notification in function(**arguments):
-            messages.put(message(job, notification))
+            messages.put(message("{}, {}".format(*job), notification))
     except Exception as e:
         messages.put(
             message(
-                job,
+                "{}, {}".format(*job),
                 "\n  "
                 "  ".join(TracebackException.from_exception(e).format()),
             )
         )
-        messages.put(message(job, "Failed."))
+        messages.put(message("{}, {}".format(*job), "Failed."))
         result["error"] = e
     finally:
         result["finished"] = dt.now()
@@ -633,7 +635,7 @@ def wrap_process(job, messages, function, arguments):
         seconds = duration.total_seconds() - hours * 3600 - minutes * 60
         messages.put(
             message(
-                job,
+                "{}, {}".format(*job),
                 "Finished in {}{}{}".format(
                     "{}h, ".format(hours) if hours else "",
                     "{}m and ".format(minutes) if minutes or hours else "",
@@ -669,7 +671,21 @@ def wrap_process(job, messages, function, arguments):
         "The number parallel processes to start, in order to handle import jobs."
     ),
 )
-def import_(context, jobs, paths, variables):
+@click.option(
+    "--cleanup/--no-cleanup",
+    "-c",
+    metavar="CLEANUP",
+    default=False,
+    show_default=True,
+    help=(
+        "Clean up after processing a file, i.e. delete it once every "
+        "specified variable it contains is imported.\n"
+        "WARNING: If you don't specify any variables or there are typos in "
+        "your variable specifications, this might delete a lot of files "
+        "really fast. Don't use this on data you don't have backups of."
+    ),
+)
+def import_(context, cleanup, jobs, paths, variables):
     """ Import an openFRED dataset.
 
     For each path found in PATHS, imports the NetCDF files found under path.
@@ -719,11 +735,24 @@ def import_(context, jobs, paths, variables):
                     )
                 )
                 for arguments in import_nc_file(filepath, variables)
-                for job in ["{}, {}".format(filepath, arguments["name"])]
+                for job in [(filepath, arguments["name"])]
             }
         )
         seen.update(filepaths)
         filepaths.clear()
+
+        if cleanup:
+            for path in seen.difference(
+                path for path, _ in results["pending"]
+            ):
+                if os.path.isfile(path):
+                    os.remove(path)
+                    messages.put(
+                        message(
+                            "Main Process ({})".format(os.getpid()),
+                            "Deleting {}.".format(path),
+                        )
+                    )
 
         if not results["pending"] and messages.empty():
             break
