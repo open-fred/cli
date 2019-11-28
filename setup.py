@@ -80,8 +80,17 @@ setup(
     ],
     python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
     install_requires=[
+        "GeoAlchemy2",
+        "Shapely",
+        "SQLAlchemy",
+        "alembic",
         "click",
-        # eg: 'aspectlib==1.1.1', 'six>=1.7',
+        "dask",
+        "netCDF4",
+        "oemof",
+        "oemof.db >= 0.0.7",
+        "toolz",
+        "xarray >= 10.6",
     ],
     extras_require={
         # eg:
