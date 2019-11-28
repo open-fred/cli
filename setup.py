@@ -29,7 +29,7 @@ setup(
     license="BSD-3-Clause",
     description=(
         "The open_FRED command line interface and other tools "
-        "for working with open_FRED data."
+        "for working with databases containing open_FRED data."
     ),
     long_description="%s\n%s"
     % (
