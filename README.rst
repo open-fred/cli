@@ -16,6 +16,7 @@ Overview
     * - package
       - | |version| |wheel| |supported-versions| |supported-implementations|
         | |commits-since|
+        | |license|
 .. |docs| image:: https://readthedocs.org/projects/cli/badge/?style=flat
     :target: https://readthedocs.org/projects/cli
     :alt: Documentation Status
@@ -65,12 +66,14 @@ Overview
     :alt: Scrutinizer Status
     :target: https://scrutinizer-ci.com/g/open-fred/cli/
 
+.. |license| image:: https://img.shields.io/pypi/l/open_FRED-cli.svg?colorB=blue
+    :alt: PyPI - License
+    :target: https://github.com/oemof/oemof-tabular/blob/master/LICENSE
 
 .. end-badges
 
 "The open_FRED command line interface and other tools for working with databases containing open_FRED data."
 
-* Free software: BSD 3-Clause License
 
 Installation
 ============
