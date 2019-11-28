@@ -68,12 +68,16 @@ Overview
 
 .. end-badges
 
-"The open_FRED command line interface and other tools for working with open_FRED data."
+"The open_FRED command line interface and other tools for working with databases containing open_FRED data."
 
 * Free software: BSD 3-Clause License
 
 Installation
 ============
+
+It's probably best to install the package into a `virtual environment`_.
+Once you've created a virtualenv, :code:`activate` it and install the
+package into it via
 
 ::
 
@@ -83,6 +87,11 @@ You can also install the in-development version with::
 
     pip install https://github.com/open-fred/cli/archive/master.zip
 
+Once you've done either, make yourself familiar with the program by running::
+
+    open_FRED --help
+
+.. _virtual environment: http://docs.python-guide.org/en/latest/dev/virtualenvs/
 
 Documentation
 =============
