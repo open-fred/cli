@@ -72,17 +72,15 @@ Overview
 
 .. end-badges
 
-"The open_FRED command line interface and other tools for working with databases containing open_FRED data."
-
+The open_FRED command line interface and other tools for working with
+databases containing open_FRED data.
 
 Installation
 ============
 
 It's probably best to install the package into a `virtual environment`_.
 Once you've created a virtualenv, :code:`activate` it and install the
-package into it via
-
-::
+package into it via::
 
     pip install open_FRED-cli
 
