@@ -25,7 +25,7 @@ def read(*names, **kwargs):
 
 setup(
     name="open_FRED-cli",
-    version="0.0.0dev",
+    version="0.0.1",
     license="BSD-3-Clause",
     description=(
         "The open_FRED command line interface and other tools "

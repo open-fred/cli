@@ -20,7 +20,7 @@ project = '"open_FRED CLI"'
 year = '2019-2020'
 author = 'Stephan Günther'
 copyright = '{0}, {1}'.format(year, author)
-version = release = '0.0.0dev'
+version = release = '0.0.1'
 
 pygments_style = 'trac'
 templates_path = ['.']
