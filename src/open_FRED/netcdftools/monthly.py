@@ -28,12 +28,10 @@ sys.argv[5]: filename
     A single file containing all merged data fill be created using this name.
 """
 
-from glob import glob, iglob
-from itertools import chain
+from glob import iglob
 from pprint import pprint as pp
-from tempfile import TemporaryDirectory as TD, mkdtemp
+from tempfile import TemporaryDirectory as TD
 from subprocess import call
-import os
 import os.path as osp
 import re
 import sys
@@ -51,7 +49,8 @@ python ../monthly.py '../' './no-height' 'ASWDIFD_S, ASWDIR_S, ASWDIR_NS2'
 python ../monthly.py '../' './' \
                      'WSS_zlevel, T_zlevel, P_zlevel, WDIRlat_zlevel'
 
-Special: Z0 (no height but weird time bounds due to mean/instantaneous measurement)
+Special: Z0
+(no height but weird time bounds due to mean/instantaneous measurement)
 
 python ../../cli/code/monthly.py './' './import-test' \
                                  'WSS_zlevel, P_zlevel' \
@@ -68,7 +67,7 @@ def merge(variable, tar, store):
         members = tar.getmembers()
         netcdfs = []
         for member in members:
-            if not variable in member.name:
+            if variable not in member.name:
                 continue
             print("Handling {}.".format(member.name))
             netcdfs.append(member.name)
@@ -100,7 +99,7 @@ def merge(variable, tar, store):
         )
         computation = merged.to_netcdf(target, format="NETCDF4", compute=False)
         with ProgressBar():
-            results = computation.compute()
+            computation.compute()
     return target
 
 
@@ -122,7 +121,7 @@ if __name__ == "__main__":
         )
         everything = []
         for tar in tars:
-            year = re.search("(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
+            year = re.search(r"(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
             merged = []
             for variable in variables:
                 merged.append(merge(variable, tar, tmp))

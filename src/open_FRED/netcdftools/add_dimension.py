@@ -1,6 +1,4 @@
 from collections import OrderedDict as OD
-from pprint import pprint as pp
-import sys
 
 import click
 import xarray as xr

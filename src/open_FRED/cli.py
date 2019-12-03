@@ -3,8 +3,8 @@ Module that contains the command line app.
 
 Why does this file exist, and why not put this in __main__?
 
-  You might be tempted to import things from __main__ later, but that will cause
-  problems: the code will get executed twice:
+  You might be tempted to import things from __main__ later, but that will
+  cause problems: the code will get executed twice:
 
   - When you run `python -mopen_FRED` python will execute
     ``__main__.py`` as a script. That means there won't be any
@@ -14,6 +14,48 @@ Why does this file exist, and why not put this in __main__?
 
   Also see (1) from http://click.pocoo.org/5/setuptools/#setuptools-integration
 """
+
+from collections.abc import MutableMapping as MM
+from contextlib import contextmanager
+from datetime import datetime as dt
+from math import floor
+from time import sleep
+from traceback import TracebackException
+import itertools as it
+import multiprocessing as mp
+import os
+
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from geoalchemy2 import WKTElement as WKT, types as geotypes
+from pandas import to_datetime
+from sqlalchemy import (
+    create_engine,
+    BigInteger as BI,
+    Column as C,
+    DateTime as DT,
+    Float,
+    ForeignKey as FK,
+    Integer as Int,
+    Interval,
+    JSON,
+    MetaData,
+    String as Str,
+    Text,
+    UniqueConstraint as UC,
+)
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.inspection import inspect
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm.exc import MultipleResultsFound as MRF
+from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
+import click
+import oemof.db
+import xarray as xr
+
+
 # TODO: Handle Timestamps and Metadata correctly.
 #   * Names:
 #     - "standard_name" is not allowed to contain whitespace
@@ -32,50 +74,6 @@ Why does this file exist, and why not put this in __main__?
 #       single variable out of the function importing a single file,
 #       which would finally lead to code being a bit less monolithic
 #       again.
-from contextlib import contextmanager
-from collections.abc import MutableMapping as MM
-from datetime import datetime as dt, timedelta as td, timezone as tz
-from functools import reduce
-from math import floor
-from operator import mul as multiply
-from time import sleep
-from traceback import TracebackException
-import itertools as it
-import multiprocessing as mp
-import os
-
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
-from geoalchemy2 import WKTElement as WKT, types as geotypes
-from numpy.ma import masked
-from pandas import to_datetime
-from sqlalchemy import (
-    create_engine,
-    BigInteger as BI,
-    Column as C,
-    DateTime as DT,
-    Float,
-    ForeignKey as FK,
-    Integer as Int,
-    Interval,
-    JSON,
-    MetaData,
-    String as Str,
-    Table,
-    Text,
-    UniqueConstraint as UC,
-)
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relationship, sessionmaker
-from sqlalchemy.orm.exc import MultipleResultsFound as MRF
-from sqlalchemy.inspection import inspect
-from sqlalchemy.schema import AddConstraint, CheckConstraint, CreateSchema
-import click
-import xarray as xr
-
-import oemof.db
 
 
 class Keychanger(MM):
@@ -182,7 +180,7 @@ class Dimensions:
                     ),
                     transformer=lambda indexes: 0,
                 )
-            except SQLAlchemyError as e:
+            except SQLAlchemyError:
                 yield "Caching time failed. Rolling back. Sleeping 7s."
                 self.session.rollback()
                 sleep(7)
@@ -230,7 +228,7 @@ class Dimensions:
                         indexes[self.index[d]] for d in ("rlat", "rlon")
                     ),
                 )
-            except SQLAlchemyError as e:
+            except SQLAlchemyError:
                 yield "Caching locations failed. Rolling back. Sleeping 7s."
                 self.session.rollback()
                 sleep(7)
@@ -259,7 +257,7 @@ class Dimensions:
             yield (o.id if idonly else o)
 
 
-### Auxiliary functions needed by more than one command.
+# Auxiliary functions needed by more than one command.
 
 
 @contextmanager
@@ -271,7 +269,7 @@ def db_session(engine):
     try:
         yield session
         session.commit()
-    except:
+    except: # noqa
         session.rollback()
         raise
     finally:
@@ -322,6 +320,7 @@ def mapped_classes(metadata):
             ),
         },
     )
+
     # TODO: Handle units.
     class Variable(Base):
         __table_args__ = ({"keep_existing": True},)
@@ -400,7 +399,7 @@ def import_nc_file(filepath, variables):
     dataset = xr.open_dataset(filepath, decode_cf=False)
     if (
         "time" in dataset.variables
-        and not "units" in dataset[dataset["time"].attrs["bounds"]].attrs
+        and "units" not in dataset[dataset["time"].attrs["bounds"]].attrs
     ):
         dataset["time_bnds"].attrs["units"] = dataset["time"].units
     dataset = xr.decode_cf(dataset)
@@ -435,7 +434,7 @@ def import_variable(dataset, name, schema, time, url):
             variable = classes["Variable"]
             kws = {}
         if time == "time":
-            assert not "time:" in ncv.attrs.get("cell_methods", ""), (
+            assert "time:" not in ncv.attrs.get("cell_methods", ""), (
                 "Looks like we found a variable which is instantaneous or "
                 "constant wrt. time\n"
                 "but also has a `cell_methods` attribute with a `time` entry."
@@ -479,6 +478,7 @@ def import_variable(dataset, name, schema, time, url):
             )
             for indexes in tuples
             # if ncv[indexes] is not masked
+            # gotten via `from numpy.ma import masked`
         )
         mapper = classes["Series"]
         for chunk in chunks(mappings, 74):
@@ -487,7 +487,7 @@ def import_variable(dataset, name, schema, time, url):
     yield "Done."
 
 
-### The commmands comprising the command line interface.
+# The commmands comprising the command line interface.
 @click.group()
 @click.pass_context
 def openFRED(context):
@@ -555,7 +555,7 @@ def setup(context, drop):
             )
     elif drop == "tables":
         classes["__Base__"].metadata.drop_all(engine)
-    if not schema in inspector.get_schema_names():
+    if schema not in inspector.get_schema_names():
         engine.execute(CreateSchema(schema))
 
     with engine.connect() as connection:
@@ -571,7 +571,7 @@ def setup(context, drop):
                 .filter_by(start=None, stop=None)
                 .one_or_none()
             )
-        except MRF as e:
+        except MRF:
             click.echo(
                 "Multiple timestamps found which have no `start` "
                 "and/or `stop` values.\nAborting."
@@ -683,7 +683,8 @@ def wrap_process(job, messages, function, arguments):
     default=1,
     show_default=True,
     help=(
-        "The number parallel processes to start, in order to handle import jobs."
+        "The number parallel processes to start, "
+        "in order to handle import jobs."
     ),
 )
 @click.option(
@@ -703,10 +704,11 @@ def wrap_process(job, messages, function, arguments):
 def import_(context, cleanup, jobs, paths, variables):
     """ Import an openFRED dataset.
 
-    For each path found in PATHS, imports the NetCDF files found under path.
-    If path is a directory, it is traversed (recursively) and each NetCDF file,
-    i.e. each file with the extension '.nc', found is imported. These directories
-    are also continuously monitored for new files, which are imported too.
+    For each path found in PATHS, imports the NetCDF files found under path. If
+    path is a directory, it is traversed (recursively) and each NetCDF file,
+    i.e. each file with the extension '.nc', found is imported. These
+    directories are also continuously monitored for new files, which are
+    imported too.
 
     If path points to a file, it is imported as is.
     """

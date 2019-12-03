@@ -1,10 +1,7 @@
-from glob import glob, iglob
-from itertools import chain
-from pprint import pprint as pp
-from tempfile import TemporaryDirectory as TD, mkdtemp
+from glob import iglob
+from tempfile import TemporaryDirectory as TD
 import os
 import os.path as osp
-import sys
 import tarfile
 
 import xarray as xr
