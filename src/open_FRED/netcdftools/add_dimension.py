@@ -30,12 +30,15 @@ wss[10] = xr.DataArray(
 wss[ALL] = xr.merge([wss[h] for h in heights[2:]])
 """
 
-def add_dimension(source, target, variable, dimension, position, value,
-        new_name):
+
+def add_dimension(
+    source, target, variable, dimension, position, value, new_name
+):
     if position != 2:
         raise NotImplementedError(
-                "Can only insert a new dimension at position 2 for now.\n"+
-                "Got: {}".format(position))
+            "Can only insert a new dimension at position 2 for now.\n"
+            + "Got: {}".format(position)
+        )
     if new_name is None:
         new_name = variable
     ds = xr.open_dataset(source)
@@ -46,31 +49,62 @@ def add_dimension(source, target, variable, dimension, position, value,
         data=[[v] for v in ds[variable].values],
         coords=OD(
             (c, ([value] if c == dimension else ds[variable].coords[c].values))
-            for c in dimensions),
-        dims=dimensions)
+            for c in dimensions
+        ),
+        dims=dimensions,
+    )
     da.attrs.update(ds.attrs)
     merged = xr.merge([ds[v] for v in ds.data_vars if v != variable] + [da])
-    merged.to_netcdf(target, format='NETCDF3_64BIT', unlimited_dims=('time',))
+    merged.to_netcdf(target, format="NETCDF3_64BIT", unlimited_dims=("time",))
 
 
 @click.command()
-@click.argument('source', type=click.File('rb'), default='-')
-@click.argument('target',type=click.File('wb'), default='-')
-@click.option('--name', '--variable', '-n', required=True, prompt=True,
-        help=('Name of the variable you want to add a dimension to.'))
-@click.option('--dimension', '-d', required=True, prompt=True,
-        help=('The dimension you want to add to VARIABLE.'))
-@click.option('--position', '-p', show_default=True, default=2,
-        type=int,
-        help=('Position (1-based) at which you want to insert DIMENSION ' +
-              'into the already existing dimensions of VARIABLE.'))
-@click.option('--value', '-i', required=True, prompt=True,
-        type=float,
-        help=('Value under which VARIABLE will be indexed along the new ' +
-              'DIMENSION. Will be treated as a float value.'))
-@click.option('--new-name', '-r',
-        help=('If supplied, VARIABLE will be renamed to the NEW-NAME in ' +
-              'TARGET.'))
+@click.argument("source", type=click.File("rb"), default="-")
+@click.argument("target", type=click.File("wb"), default="-")
+@click.option(
+    "--name",
+    "--variable",
+    "-n",
+    required=True,
+    prompt=True,
+    help=("Name of the variable you want to add a dimension to."),
+)
+@click.option(
+    "--dimension",
+    "-d",
+    required=True,
+    prompt=True,
+    help=("The dimension you want to add to VARIABLE."),
+)
+@click.option(
+    "--position",
+    "-p",
+    show_default=True,
+    default=2,
+    type=int,
+    help=(
+        "Position (1-based) at which you want to insert DIMENSION "
+        + "into the already existing dimensions of VARIABLE."
+    ),
+)
+@click.option(
+    "--value",
+    "-i",
+    required=True,
+    prompt=True,
+    type=float,
+    help=(
+        "Value under which VARIABLE will be indexed along the new "
+        + "DIMENSION. Will be treated as a float value."
+    ),
+)
+@click.option(
+    "--new-name",
+    "-r",
+    help=(
+        "If supplied, VARIABLE will be renamed to the NEW-NAME in " + "TARGET."
+    ),
+)
 def main(**kwargs):
     """ Adds a dimension to a variable in a netCDF file.
 
@@ -83,6 +117,5 @@ def main(**kwargs):
     return add_dimension(**kwargs)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

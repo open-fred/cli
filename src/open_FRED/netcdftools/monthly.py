@@ -60,10 +60,11 @@ python ../../cli/code/monthly.py './' './import-test' \
 
 """
 
+
 def merge(variable, tar, store):
-    #chunks={"time": 12, "rlat": 11, "rlon": 11}
-    chunks={}
-    with TD(dir='./_T_') as tmp:
+    # chunks={"time": 12, "rlat": 11, "rlon": 11}
+    chunks = {}
+    with TD(dir="./_T_") as tmp:
         members = tar.getmembers()
         netcdfs = []
         for member in members:
@@ -76,12 +77,15 @@ def merge(variable, tar, store):
             fix_height = re.search("WSS_10M|WDIRlat_10M", member.name)
             if fix_height:
                 print("Fixing height.")
-                add_dimension(source=path, target=osp.join(tmp, "fixed"),
-                        variable=fix_height.group(),
-                        dimension="height",
-                        position=2,
-                        value=10.0,
-                        new_name=fix_height.group()[:-4])
+                add_dimension(
+                    source=path,
+                    target=osp.join(tmp, "fixed"),
+                    variable=fix_height.group(),
+                    dimension="height",
+                    position=2,
+                    value=10.0,
+                    new_name=fix_height.group()[:-4],
+                )
                 call(["mv", osp.join(tmp, "fixed"), path])
         netcdfs = [osp.join(tmp, f) for f in netcdfs]
         print("Merging:")
@@ -89,14 +93,12 @@ def merge(variable, tar, store):
         target = osp.join(store, "{}.nc".format(variable))
         print("--> {}".format(target))
         datasets = [
-                xr.open_dataset(n, decode_cf=False, chunks=chunks)
-                for n in netcdfs]
-        merged = xr.merge(d[v]
-                for d in datasets
-                for v in d.data_vars
-                if v != 'rotated_pole')
-        computation = merged.to_netcdf(target, format='NETCDF4',
-                compute=False)
+            xr.open_dataset(n, decode_cf=False, chunks=chunks) for n in netcdfs
+        ]
+        merged = xr.merge(
+            d[v] for d in datasets for v in d.data_vars if v != "rotated_pole"
+        )
+        computation = merged.to_netcdf(target, format="NETCDF4", compute=False)
         with ProgressBar():
             results = computation.compute()
     return target
@@ -110,12 +112,14 @@ if __name__ == "__main__":
     """
 
     variables = [s.strip() for s in sys.argv[3].split(",")]
-    #chunks={"time": 12, "rlat": 11, "rlon": 11}
-    chunks={}
-    with TD(dir='./_T_/') as tmp:
-        tars = list(tarfile.open(tar)
-                for tar in iglob(osp.join(sys.argv[1], "*.tar"))
-                if re.search(sys.argv[4], tar))
+    # chunks={"time": 12, "rlat": 11, "rlon": 11}
+    chunks = {}
+    with TD(dir="./_T_/") as tmp:
+        tars = list(
+            tarfile.open(tar)
+            for tar in iglob(osp.join(sys.argv[1], "*.tar"))
+            if re.search(sys.argv[4], tar)
+        )
         everything = []
         for tar in tars:
             year = re.search("(\d\d\d\d_\d\d)\.tar", tar.name).groups()[0]
@@ -127,19 +131,23 @@ if __name__ == "__main__":
             mergetarget = "{}-{}.nc".format(sys.argv[2], year)
             print("--> {}".format(mergetarget))
             datasets = (
-                    xr.open_dataset(path, decode_cf=False, chunks=chunks)
-                    for path in merged)
+                xr.open_dataset(path, decode_cf=False, chunks=chunks)
+                for path in merged
+            )
             data_vars = [d[v] for d in datasets for v in d.data_vars]
             for dv in data_vars:
                 if dv.name[0].isupper():
-                    dv.encoding['least_significant_digit'] = 3
+                    dv.encoding["least_significant_digit"] = 3
             ds = xr.merge(data_vars)
-            computation = ds.to_netcdf(mergetarget,
-                    format='NETCDF4',
-                    compute=False,
-                    encoding={
-                        v: {'complevel': 9, 'zlib': True}
-                        for v in list(ds.variables)})
+            computation = ds.to_netcdf(
+                mergetarget,
+                format="NETCDF4",
+                compute=False,
+                encoding={
+                    v: {"complevel": 9, "zlib": True}
+                    for v in list(ds.variables)
+                },
+            )
             with ProgressBar():
                 computation.compute()
             call(["rm", "-r"] + merged)
@@ -165,4 +173,3 @@ if __name__ == "__main__":
         #call(["mv", tmpeverything, sys.argv[5]])
         """
     print("All done.")
-
