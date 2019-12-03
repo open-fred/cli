@@ -85,9 +85,9 @@ setup(
         "dask",
         "netCDF4",
         "oemof",
-        "oemof.db >= 0.0.7",
+        "oemof.db >= 0.0.6",
         "toolz",
-        "xarray >= 10.6",
+        "xarray >= 0.10.6",
     ],
     extras_require={
         # eg:
