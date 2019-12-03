@@ -790,3 +790,4 @@ def import_(context, cleanup, jobs, paths, variables):
 def main():
     openFRED.add_command(db)
     openFRED()
+main.name = "open_FRED"

@@ -9,4 +9,4 @@ def test_main():
     result = runner.invoke(main, [])
 
     assert result.output == ''
-    assert result.exit_code == -1
+    assert result.exit_code == 1
