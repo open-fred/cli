@@ -84,7 +84,6 @@ setup(
         "click",
         "dask",
         "netCDF4",
-        "oemof",
         "oemof.db >= 0.0.6",
         "toolz",
         "xarray >= 0.10.6",
